@@ -1,0 +1,7 @@
+{
+	"name": "BitsOfData",
+	"files": [ { 
+		"directory": [".", "src", "include", "test", "mocks"],
+		"recursive": 1
+	} ]
+}
