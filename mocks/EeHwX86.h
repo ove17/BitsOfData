@@ -12,10 +12,15 @@
 #define EEPROM_SIZE (EEPROM_PAGE_SIZE * EEPROM_NUM_PAGES) // 64 * 128 = 8kB
 
 
+void dumpFakeEeByte(uint16_t byteToDump);
 void dumpFakeEe(const uint16_t startLine,
-                const uint8_t numLines,
+                const uint16_t numLines,
                 const uint8_t bytesPerLine);
 void dumpEeTable(const uint8_t tableId,
                  const uint8_t bytesPerRecord);
+void assertEeAddressExists(const uint16_t eeAddress);
+bool wasAddressValid();
+void disableAssertAddress();
+void enableAssertAddress();
 
 #endif

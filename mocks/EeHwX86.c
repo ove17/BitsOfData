@@ -1,5 +1,8 @@
 /** @file EeHwX86.c
  *  Low-level hardware-dependent functions to read and write EEPROM
+ *
+ * NOTE: EE page size is not guarded against in asserts! Depending on
+ *      hw implemenation this may be necessary.
  */
 
 #include <assert.h>
@@ -14,10 +17,12 @@
 static uint8_t _fakeEE[EEPROM_SIZE];
 
 
-static bool eeAddressValid(const eeAddress_t eeAddress);
+static bool AssertAddres = true;
+static bool AddressValid = true;
 
 
 void eeInit() {}
+
 
 // real EE is clear by default
 void eeClear() {
@@ -25,42 +30,58 @@ void eeClear() {
 		_fakeEE[i] = EE_CLEAR_VALUE;
 }
 
-eeAddress_t eeGetSize() {
-    return EEPROM_SIZE;
+
+void eeWriteUint8(const eeAddress_t eeAddress,
+                  const uint8_t eeData) {
+    assertEeAddressExists(eeAddress);
+    _fakeEE[eeAddress] = eeData;
 }
 
-uint8_t eeReadUint8(const eeAddress_t eeAddress) {
-    if (eeAddressValid(eeAddress)) {
-		return _fakeEE[eeAddress];
-    } else
-        return 0x0F; // ERROR
-}
 
 void eeWriteUint16(const eeAddress_t eeAddress,
-                            const uint16_t value) {
+                   const uint16_t value) {
+    assertEeAddressExists(eeAddress + 1);
     eeWriteUint8(eeAddress, (uint8_t)(value & 0x0FF));
     eeWriteUint8(eeAddress + 1, (uint8_t)(value >> 8));
 }
 
 
-uint16_t eeReadUint16(const eeAddress_t eeAddress) {
-    return (uint16_t)(eeReadUint8(eeAddress + 1) << 8) + eeReadUint8(eeAddress);
+void eeWriteUint8Array(const eeAddress_t eeAddress,
+                       const uint8_t *eeData,
+                       const uint16_t numBytes) {
+    assertEeAddressExists(eeAddress + numBytes);
+    for (uint16_t i=0; i<numBytes; i++) {
+        eeWriteUint8(eeAddress + i, eeData[i]);
+    }
 }
 
-void eeWriteUint8(const eeAddress_t eeAddress, const uint8_t eeData) {
-    if (eeAddressValid(eeAddress)) {
-		_fakeEE[eeAddress] = eeData;
-    }
+
+uint8_t eeReadUint8(const eeAddress_t eeAddress) {
+    assertEeAddressExists(eeAddress);
+    return _fakeEE[eeAddress];
+}
+
+
+uint16_t eeReadUint16(const eeAddress_t eeAddress) {
+    assertEeAddressExists(eeAddress + 1);
+    return (uint16_t)(eeReadUint8(eeAddress + 1) << 8) + eeReadUint8(eeAddress);
 }
 
 
 void eeReadUint8Array(const eeAddress_t eeAddress,
                       uint8_t *buffer,
                       const uint16_t numBytes) {
-    assert(numBytes <= EEPROM_PAGE_SIZE);
+    assertEeAddressExists(eeAddress + numBytes);
     for (uint16_t i=0; i<numBytes; i++) {
         buffer[i] = eeReadUint8(eeAddress + i);
     }
+}
+
+
+void eeReadPage(const eeAddress_t eeAddress,
+                uint8_t *buffer) {
+    assertEeAddressExists(eeAddress);
+    eeReadUint8Array(eeAddress, buffer, EEPROM_PAGE_SIZE);
 }
 
 
@@ -69,24 +90,31 @@ uint16_t eeGetPageSize() {
 }
 
 
-void eeReadPage(const eeAddress_t eeAddress,
-                uint8_t *buffer) {
-    eeReadUint8Array(eeAddress, buffer, EEPROM_PAGE_SIZE);
+eeAddress_t eeGetSize() {
+    return EEPROM_SIZE;
 }
 
 
-void dumpFakeEe(uint16_t startLine, uint8_t numLines, uint8_t bytesPerLine) {
-    printf("\nEE size = %i\n", eeGetSize());
-    printf("\nline\tB0\tB1\tB2\tB3\tB4\n");
-    for (int line=startLine; line<startLine+numLines; line++) {
+/////  TESTING FUNCTIONS ONLY:
+
+
+void dumpFakeEeByte(uint16_t byteToDump) {
+    printf("\nEE byte[%i] = %i\n", byteToDump, eeReadUint8(byteToDump));
+}
+
+
+void dumpFakeEe(uint16_t startByte, uint16_t numLines, uint8_t bytesPerLine) {
+    printf("\nStartByte = %i\n", startByte);
+    printf("line");
+    for(int i=0; i<bytesPerLine; i++) {
+        printf("\tB%i", i);
+    }
+    printf("\n");
+    for (int line=0; line<numLines; line++) {
         printf("%3i\t", line);
         for (int col=0; col<bytesPerLine; col++) {
-            eeAddress_t addr = (eeAddress_t)(col+bytesPerLine*line);
-            if (eeAddressValid(addr)) {
-                printf("%3i\t", eeReadUint8(addr));
-            } else {
-                printf("  x\t");
-            }
+            eeAddress_t addr = startByte + (eeAddress_t)(col+bytesPerLine*line);
+            printf("%3i\t", eeReadUint8(addr));
         }
         printf("\n");
     }
@@ -113,18 +141,33 @@ void dumpEeTable(uint8_t tableId, uint8_t bytesPerRecord) {
         printf("%3i\t", record);
         for (int col = 0; col < bytesPerRecord; col++) {
             eeAddress_t addr = (eeAddress_t)(start + col + bytesPerRecord*record);
-            if (eeAddressValid(addr)) {
-                printf("%3i\t", eeReadUint8(addr));
-            } else {
-                printf("  x\t");
-            }
+            printf("%3i\t", eeReadUint8(addr));
         }
         printf("\n");
     }
     printf("\n");
 }
 
-static bool eeAddressValid(const eeAddress_t eeAddress) {
-    return (eeAddress < EEPROM_SIZE);
+
+// This assert can be switched off for testing, using enable/disable below
+void assertEeAddressExists(const uint16_t eeAddress) {
+    AddressValid = (eeAddress < EEPROM_SIZE);
+    if (AssertAddres) {
+        assert(AddressValid);
+    }
 }
 
+
+void disableAssertAddress() {
+    AssertAddres = false;
+}
+
+
+void enableAssertAddress() {
+    AssertAddres = true;
+}
+
+
+bool wasAddressValid() {
+    return AddressValid;
+}
