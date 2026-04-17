@@ -12,8 +12,9 @@
 /// the type of the EE address can be changed to suit EE size
 typedef uint16_t eeAddress_t;
 
-void eeInit();
-void eeClear();
+
+void eeInit(void);
+void eeClear(void);
 
 void eeWriteUint8(const eeAddress_t eeAddress,
                   const uint8_t eeData);
@@ -31,8 +32,8 @@ void eeReadUint8Array(const eeAddress_t startAddress,
 void eeReadPage(const uint16_t page,
                 uint8_t *buffer);
 
-eeAddress_t eeGetPageSize();
-eeAddress_t eeGetSize();
+eeAddress_t eeGetPageSize(void);
+eeAddress_t eeGetSize(void);
 
 // NOTE: this is only used for testing, replaced with a dummy on target hardware
 void assertEeAddressExists(const uint16_t eeAddress);

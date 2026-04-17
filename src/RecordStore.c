@@ -72,21 +72,21 @@ static uint8_t NumTables = 0;
 static tableDescriptorT* TableCatalog = NULL;
 
 
-static void allocateTableCatalog();
-static void allocateRecordDataBuffers();
-static void allocateRecordInUseBitmap();
-static void generateRecordInUseBitmap();
-static void loadTableCatalog();
-static bool isTableCatalogValid();
+static void allocateTableCatalog(void);
+static void allocateRecordDataBuffers(void);
+static void allocateRecordInUseBitmap(void);
+static void generateRecordInUseBitmap(void);
+static void loadTableCatalog(void);
+static bool isTableCatalogValid(void);
 static void createTable(const uint8_t table,
                         const uint8_t maxNumRecords,
                         const uint8_t recordSize);
-static void storeTableCatalog();
+static void storeTableCatalog(void);
 static uint8_t getNumRecordsFromIndex(tableDescriptorT* tableRow);
 static bool recordIndexIsNotUsed(tableDescriptorT* tableRow,
                                  const uint8_t record);
 static void storeNumTables(const uint8_t numTables);
-static uint8_t loadNumTables();
+static uint8_t loadNumTables(void);
 static bool isTableSeparatorByte(const eeAddress_t eeAddress);
 
 static eeAddress_t getDataAddress(tableDescriptorT* tableRow, const uint8_t record);
@@ -141,13 +141,13 @@ bool rs_tryToOpenRecordStore(const uint8_t numTables) {
 
 
 // NOTE: no error checking, system must have plenty of RAM
-static void allocateTableCatalog() {
+static void allocateTableCatalog(void) {
     TableCatalog = calloc(NumTables * TABLE_CATALOG_ROW_SIZE, sizeof(tableDescriptorT));
 }
 
 
 // Loads the tableCatalog from EE into RAM
-static void loadTableCatalog() {
+static void loadTableCatalog(void) {
     if (loadNumTables() != NumTables) return;
     eeAddress_t address = ADDR_TABLE_CATALOG;
     tableDescriptorT* tableRow;
@@ -193,7 +193,7 @@ static void loadTableCatalog() {
  *  byte5    maxNumRecords (mNR for short)
  *
  */
-static bool isTableCatalogValid() {
+static bool isTableCatalogValid(void) {
     if (loadNumTables() != NumTables) return false;
     eeAddress_t address = ADDR_TABLE_CATALOG + NumTables * TABLE_CATALOG_ROW_SIZE + 1;
     tableDescriptorT* tableRow;
@@ -237,7 +237,7 @@ static bool recordIndexIsNotUsed(tableDescriptorT* tableRow,
 
 
 // only for testing - should never be used in production
-void rs_closeTableCatalog() {
+void rs_closeTableCatalog(void) {
     if (TableCatalog) {
         for (uint8_t table=0; table < NumTables; table++) {
             if (TableCatalog[table].recordDataBuffer) {
@@ -258,7 +258,7 @@ void rs_closeTableCatalog() {
 
 
 // causes clearing of Ee on next openTableCatalog, e.g. for updating to next sw version
-void rs_deleteTableCatalog() {
+void rs_deleteTableCatalog(void) {
     storeNumTables(0);
 }
 
@@ -278,7 +278,7 @@ uint8_t rs_createTable(const uint8_t maxNumRecords,
 }
 
 
-void rs_commitTables() {
+void rs_commitTables(void) {
     storeTableCatalog();
     allocateRecordDataBuffers();
     allocateRecordInUseBitmap();
@@ -311,7 +311,7 @@ static void createTable(const uint8_t table,
 }
 
 
-static void storeTableCatalog() {
+static void storeTableCatalog(void) {
     storeNumTables(NumTables);
     eeAddress_t address = ADDR_TABLE_CATALOG;
     tableDescriptorT* tableRow = NULL;
@@ -342,7 +342,7 @@ static uint16_t getDataAreaSize(tableDescriptorT* tableRow) {
 
 
 // NOTE: no error checking, system must have plenty of RAM
-static void allocateRecordDataBuffers() {
+static void allocateRecordDataBuffers(void) {
     tableDescriptorT* tableRow;
     for (uint8_t table=0; table < NumTables; table++) {
         tableRow = &TableCatalog[table];
@@ -352,7 +352,7 @@ static void allocateRecordDataBuffers() {
 
 
 // NOTE: no error checking, system must have plenty of RAM
-static void allocateRecordInUseBitmap() {
+static void allocateRecordInUseBitmap(void) {
     tableDescriptorT* tableRow;
     for (uint8_t table=0; table < NumTables; table++) {
         tableRow = &TableCatalog[table];
@@ -362,7 +362,7 @@ static void allocateRecordInUseBitmap() {
 }
 
 
-static void generateRecordInUseBitmap() {
+static void generateRecordInUseBitmap(void) {
     tableDescriptorT* tableRow;
     for (uint8_t table = 0; table < NumTables; table++) {
         tableRow = &TableCatalog[table];
@@ -379,7 +379,7 @@ static void storeNumTables(const uint8_t numTables) {
 }
 
 
-static uint8_t loadNumTables() {
+static uint8_t loadNumTables(void) {
     return eeReadUint8(ADDR_NUM_TABLES);
 }
 

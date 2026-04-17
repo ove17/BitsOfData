@@ -21,11 +21,11 @@ static bool AssertAddres = true;
 static bool AddressValid = true;
 
 
-void eeInit() {}
+void eeInit(void) {}
 
 
 // real EE is clear by default
-void eeClear() {
+void eeClear(void) {
 	for (eeAddress_t i = 0; i < EEPROM_SIZE; i++)
 		_fakeEE[i] = EE_CLEAR_VALUE;
 }
@@ -85,12 +85,12 @@ void eeReadPage(const eeAddress_t eeAddress,
 }
 
 
-uint16_t eeGetPageSize() {
+uint16_t eeGetPageSize(void) {
     return EEPROM_PAGE_SIZE;
 }
 
 
-eeAddress_t eeGetSize() {
+eeAddress_t eeGetSize(void) {
     return EEPROM_SIZE;
 }
 
@@ -158,16 +158,16 @@ void assertEeAddressExists(const uint16_t eeAddress) {
 }
 
 
-void disableAssertAddress() {
+void disableAssertAddress(void) {
     AssertAddres = false;
 }
 
 
-void enableAssertAddress() {
+void enableAssertAddress(void) {
     AssertAddres = true;
 }
 
 
-bool wasAddressValid() {
+bool wasAddressValid(void) {
     return AddressValid;
 }

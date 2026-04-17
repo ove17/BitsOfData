@@ -48,9 +48,9 @@
 
 
 bool rs_tryToOpenRecordStore(const uint8_t numTables);
-void rs_closeTableCatalog();    // for testing only!
-void rs_commitTables();
-void rs_deleteTableCatalog();
+void rs_closeTableCatalog(void);    // for testing only!
+void rs_commitTables(void);
+void rs_deleteTableCatalog(void);
 
 uint8_t rs_createTable(const uint8_t maxNumRecords,
                        const uint8_t recordSize);

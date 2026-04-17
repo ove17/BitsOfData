@@ -27,7 +27,7 @@ TEST_SRC_DIRS += $(MOCK_DIR)
 # what to call the test binary
 TEST_TARGET = testAll
 
-# Some flags to quiet clang
+# Some flags to silence clang
 ifeq ($(shell $(CC) -v 2>&1 | grep -c "clang"), 1)
 CPPUTEST_WARNINGFLAGS += -Wno-unknown-warning-option
 CPPUTEST_WARNINGFLAGS += -Wno-covered-switch-default

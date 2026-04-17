@@ -18,9 +18,10 @@ void dumpFakeEe(const uint16_t startLine,
                 const uint8_t bytesPerLine);
 void dumpEeTable(const uint8_t tableId,
                  const uint8_t bytesPerRecord);
+
 void assertEeAddressExists(const uint16_t eeAddress);
-bool wasAddressValid();
-void disableAssertAddress();
-void enableAssertAddress();
+bool wasAddressValid(void);
+void disableAssertAddress(void);
+void enableAssertAddress(void);
 
 #endif

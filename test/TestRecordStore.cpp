@@ -488,25 +488,25 @@ TEST(RandomDataWrite, getRecordRetrievesExactlyWhatSetRecordWroteOnFullEeWrite) 
     uint32_t seed0 = (uint32_t)time(NULL);
     seed = seed0;
     for (uint8_t table = 0; table < numTables; table++) {
-        uint8_t rawRecord[recordSize[table]];
+        uint8_t rawRecord[255];
+        uint8_t recSize = recordSize[table];
         for (uint8_t record = 0; record < numRecords[table]; record++) {
-            for (uint8_t i = 0; i < recordSize[table]; i++) {
+            for (uint8_t i = 0; i < recSize; i++) {
                 rawRecord[i] = nextByte();
             }
             rs_setRecord(table, record, rawRecord);
         }
     }
-    uint8_t msgLen = 64;
-    char msg[msgLen];
+    char msg[64];
     seed = seed0;
     for (uint8_t table = 0; table < numTables; table++) {
+        uint8_t rawRecord[255];
         uint8_t recSize = recordSize[table];
-        uint8_t rawRecord[recSize];
         for (uint8_t record = 0; record < numRecords[table]; record++) {
             for (uint8_t i = 0; i < recSize; i++) {
                 rawRecord[i] = nextByte();
             }
-            snprintf(msg, msgLen, "table=%u record=%u seed=%u", table, record, seed0);
+            snprintf(msg, 64, "table=%u record=%u seed=%u", table, record, seed0);
             MEMCMP_EQUAL_TEXT(rawRecord, rs_getRecord(table, record), recSize, msg);
         }
     }
