@@ -22,7 +22,7 @@
  *
  * Record access returns a pointer to a persistent buffer.
  *  - The buffer is owned by the RecordStore and reused for subsequent calls.
- *  - Its content is overwritten by each call to rs_getRecord().
+ *  - Its content is overwritten by each call to rs_getRawRecord().
  *  - The buffer length equals the record size of the table.
  *
  * Records are set using a pointer to a fixed-size byte array provided by the
@@ -62,12 +62,12 @@ uint8_t rs_insertRecordAfter(const uint8_t table,
                              const uint8_t record);
 bool rs_deleteRecord(const uint8_t table,
                      const uint8_t record);
-uint8_t rs_deleteAllRecordsIn(const uint8_t table);
+uint8_t rs_deleteAllRecords(const uint8_t table);
 
-void rs_setRecord(const uint8_t table,
-                  const uint8_t record,
-                  uint8_t* rawRecord);
-uint8_t* rs_getRecord(const uint8_t table,
-                      const uint8_t record);
+void rs_setRawRecord(const uint8_t table,
+                     const uint8_t record,
+                     uint8_t* rawRecord);
+uint8_t* rs_getRawRecord(const uint8_t table,
+                         const uint8_t record);
 
 #endif

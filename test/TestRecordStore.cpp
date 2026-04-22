@@ -71,7 +71,7 @@ static void createMockTableCatalog(const uint8_t numTables) {
 
 
 
-TEST_GROUP(OpenTableCatalog) {
+TEST_GROUP(OpenRecordStore) {
     void setup() {
         eeClear();
     }
@@ -82,19 +82,19 @@ TEST_GROUP(OpenTableCatalog) {
 };
 
 
-TEST(OpenTableCatalog, openTableCatalogReturnsFalseIfItDoesNotExistYet) {
+TEST(OpenRecordStore, openTableCatalogReturnsFalseIfItDoesNotExistYet) {
     CHECK_FALSE(rs_tryToOpenRecordStore(2));
 }
 
 
-TEST(OpenTableCatalog, openTableCatalogOnAValidListReturnsTrue) {
+TEST(OpenRecordStore, openTableCatalogOnAValidListReturnsTrue) {
     createMockTableCatalog(5);
     CHECK_TRUE(rs_tryToOpenRecordStore(5));
 }
 
 
 // NOTE: implementation details exposed, but keep
-TEST(OpenTableCatalog, openTableCatalogReturnsFalseIfNumTablesIsInvalid) {
+TEST(OpenRecordStore, openTableCatalogReturnsFalseIfNumTablesIsInvalid) {
     createMockTableCatalog(5);
     eeWriteUint8(0, 4); // numTables != 5
     CHECK_FALSE(rs_tryToOpenRecordStore(5));
@@ -102,7 +102,7 @@ TEST(OpenTableCatalog, openTableCatalogReturnsFalseIfNumTablesIsInvalid) {
 
 
 // NOTE: implementation details exposed, but keep
-TEST(OpenTableCatalog, openTableCatalogReturnsFalseIfRecordIndexAddressIsInvalid) {
+TEST(OpenRecordStore, openTableCatalogReturnsFalseIfRecordIndexAddressIsInvalid) {
     createMockTableCatalog(5);
     eeWriteUint8(1, 31); // recordIndexAddress[0] != 32
     CHECK_FALSE(rs_tryToOpenRecordStore(5));
@@ -110,7 +110,7 @@ TEST(OpenTableCatalog, openTableCatalogReturnsFalseIfRecordIndexAddressIsInvalid
 
 
 // NOTE: implementation details exposed, but keep
-TEST(OpenTableCatalog, openTableCatalogReturnsFalseIfRecordDataAddressIsInvalid) {
+TEST(OpenRecordStore, openTableCatalogReturnsFalseIfRecordDataAddressIsInvalid) {
     createMockTableCatalog(5);
     eeWriteUint8(9, 58); // RecordDataAddress[1] != 59
     CHECK_FALSE(rs_tryToOpenRecordStore(5));
@@ -118,7 +118,7 @@ TEST(OpenTableCatalog, openTableCatalogReturnsFalseIfRecordDataAddressIsInvalid)
 
 
 // NOTE: implementation details exposed, but keep
-TEST(OpenTableCatalog, openTableCatalogReturnsFalseIfRecordIndexEndByteIsNot0) {
+TEST(OpenRecordStore, openTableCatalogReturnsFalseIfRecordIndexEndByteIsNot0) {
     createMockTableCatalog(5);
     eeWriteUint8(99, 1); // endRecordIndex[2] != 0
     CHECK_FALSE(rs_tryToOpenRecordStore(5));
@@ -126,7 +126,7 @@ TEST(OpenTableCatalog, openTableCatalogReturnsFalseIfRecordIndexEndByteIsNot0) {
 
 
 // NOTE: implementation details exposed, but keep
-TEST(OpenTableCatalog, openTableCatalogReturnsFalseIfRecordDataEndByteIsNot0) {
+TEST(OpenRecordStore, openTableCatalogReturnsFalseIfRecordDataEndByteIsNot0) {
     createMockTableCatalog(5);
     eeWriteUint8(964, 1); // endRecordData[5] != 0
     CHECK_FALSE(rs_tryToOpenRecordStore(5));
@@ -134,14 +134,14 @@ TEST(OpenTableCatalog, openTableCatalogReturnsFalseIfRecordDataEndByteIsNot0) {
 
 
 // NOTE: implementation details exposed, but keep
-TEST(OpenTableCatalog, openTableCatalogReturnsFalseIfTableCatalogEndByteIsNot0) {
+TEST(OpenRecordStore, openTableCatalogReturnsFalseIfTableCatalogEndByteIsNot0) {
     createMockTableCatalog(5);
     eeWriteUint8(31, 1);
     CHECK_FALSE(rs_tryToOpenRecordStore(5));
 }
 
 
-TEST(OpenTableCatalog, openTableCatalogUsesExistingRecordsToDetermineNumRecords) {
+TEST(OpenRecordStore, openTableCatalogUsesExistingRecordsToDetermineNumRecords) {
     rs_tryToOpenRecordStore(1);
 //dumpFakeEe(1, 10, numBytesPerTable);
     rs_createTable(5, 2);
@@ -158,7 +158,7 @@ TEST(OpenTableCatalog, openTableCatalogUsesExistingRecordsToDetermineNumRecords)
 
 
 // NOTE: implementation details exposed, but keep
-TEST(OpenTableCatalog, deleteTableCatalogCausesOpenTableCatalogToClearEe) {
+TEST(OpenRecordStore, deleteTableCatalogCausesOpenRecordStoreToClearEe) {
     rs_tryToOpenRecordStore(1);
     rs_createTable(5, 2);
     rs_commitTables();
@@ -344,14 +344,14 @@ TEST(Records, insertRecordAfterIncreasesTheNumberOfRecordsByOne) {
 
 TEST(Records, insertRecordAfter_On2ndRecord_InsertsRecordIndex) {
     createRecords(0, 2);        // recordIndex: 0, 1
-    uint8_t rec[3] = {1,0,0};   rs_setRecord(0, 0, rec);
-    rec[0] = 2;                 rs_setRecord(0, 1, rec);
+    uint8_t rec[3] = {1,0,0};   rs_setRawRecord(0, 0, rec);
+    rec[0] = 2;                 rs_setRawRecord(0, 1, rec);
 //dumpFakeEe(1, 7, numBytesPerTable);
     BYTES_EQUAL(1, rs_insertRecordAfter(0, 0)); // recordIndex: 0, 2, 1
 //dumpFakeEe(1, 7, numBytesPerTable);
-    BYTES_EQUAL(   1, *rs_getRecord(0, 0));
-    BYTES_EQUAL(0xFF, *rs_getRecord(0, 1)); // the inserted record
-    BYTES_EQUAL(   2, *rs_getRecord(0, 2));
+    BYTES_EQUAL(   1, *rs_getRawRecord(0, 0));
+    BYTES_EQUAL(0xFF, *rs_getRawRecord(0, 1)); // the inserted record
+    BYTES_EQUAL(   2, *rs_getRawRecord(0, 2));
 }
 
 
@@ -373,44 +373,44 @@ TEST(Records, deleteRecordOnTheLastRecordReducesNumRecordsBy1) {
 
 TEST(Records, deleteRecordOnTheMiddleRecordShiftsLastRecord) {
     createRecords(0, 3);
-    uint8_t rec[3] = {1,0,0};   rs_setRecord(0, 0, rec);
-    rec[0] = 2;                 rs_setRecord(0, 1, rec);
-    rec[0] = 3;                 rs_setRecord(0, 2, rec);
+    uint8_t rec[3] = {1,0,0};   rs_setRawRecord(0, 0, rec);
+    rec[0] = 2;                 rs_setRawRecord(0, 1, rec);
+    rec[0] = 3;                 rs_setRawRecord(0, 2, rec);
     CHECK_TRUE(rs_deleteRecord(0, 1));
-    BYTES_EQUAL(1, *rs_getRecord(0, 0));
-    BYTES_EQUAL(3, *rs_getRecord(0, 1));
+    BYTES_EQUAL(1, *rs_getRawRecord(0, 0));
+    BYTES_EQUAL(3, *rs_getRawRecord(0, 1));
 }
 
 
 TEST(Records, deleteRecordOnFullRecordIndexShiftsRecordIndex) {
     createRecords(0, maxNumRecords);
     uint8_t rec[3] = {1,0,0};
-    rs_setRecord(0, 0, rec);
+    rs_setRawRecord(0, 0, rec);
     for (uint8_t i = 1; i < maxNumRecords; i++) {
         rec[0] = i+1;
-        rs_setRecord(0, i, rec);
+        rs_setRawRecord(0, i, rec);
     }
     CHECK_TRUE(rs_deleteRecord(0, 5));
-    BYTES_EQUAL( 1, *rs_getRecord(0, 0));
-    BYTES_EQUAL( 5, *rs_getRecord(0, 4));
-    BYTES_EQUAL( 7, *rs_getRecord(0, 5));
-    BYTES_EQUAL(10, *rs_getRecord(0, 8));
+    BYTES_EQUAL( 1, *rs_getRawRecord(0, 0));
+    BYTES_EQUAL( 5, *rs_getRawRecord(0, 4));
+    BYTES_EQUAL( 7, *rs_getRawRecord(0, 5));
+    BYTES_EQUAL(10, *rs_getRawRecord(0, 8));
 }
 
 
 TEST(Records, deleteRecordOnTheFirstRecordShiftsAllRecords) {
     createRecords(0, maxNumRecords);
     uint8_t rec[3] = {1,0,0};
-    rs_setRecord(0, 0, rec);
+    rs_setRawRecord(0, 0, rec);
     for (uint8_t i = 1; i < maxNumRecords; i++) {
         rec[0] = i+1;
-        rs_setRecord(0, i, rec);
+        rs_setRawRecord(0, i, rec);
     }
     CHECK_TRUE(rs_deleteRecord(0, 0));
-    BYTES_EQUAL( 2, *rs_getRecord(0, 0));
-    BYTES_EQUAL( 3, *rs_getRecord(0, 1));
-    BYTES_EQUAL( 9, *rs_getRecord(0, 7));
-    BYTES_EQUAL(10, *rs_getRecord(0, 8));
+    BYTES_EQUAL( 2, *rs_getRawRecord(0, 0));
+    BYTES_EQUAL( 3, *rs_getRawRecord(0, 1));
+    BYTES_EQUAL( 9, *rs_getRawRecord(0, 7));
+    BYTES_EQUAL(10, *rs_getRawRecord(0, 8));
 }
 
 
@@ -427,20 +427,20 @@ TEST(Records, deleteRecordIsPersistentOnReboot) {
 
 TEST(Records, deleteAllRecordsLeaves0Records) {
     createRecords(0, 5);
-    rs_deleteAllRecordsIn(0);
+    rs_deleteAllRecords(0);
     BYTES_EQUAL(0, rs_getNumRecords(0));
 }
 
 
 TEST(Records, deleteAllRecordsReturnsTheNumberOfDeletedRecords) {
     createRecords(0, maxNumRecords);
-    BYTES_EQUAL(maxNumRecords, rs_deleteAllRecordsIn(0));
+    BYTES_EQUAL(maxNumRecords, rs_deleteAllRecords(0));
 }
 
 
 TEST(Records, deleteAllRecordsMakesSpaceForNewRecords) {
     createRecords(0, 3);
-    rs_deleteAllRecordsIn(0);
+    rs_deleteAllRecords(0);
     createRecords(0, maxNumRecords-1);
     BYTES_EQUAL(9, rs_appendRecord(0));
 }
@@ -494,7 +494,7 @@ TEST(RandomDataWrite, getRecordRetrievesExactlyWhatSetRecordWroteOnFullEeWrite) 
             for (uint8_t i = 0; i < recSize; i++) {
                 rawRecord[i] = nextByte();
             }
-            rs_setRecord(table, record, rawRecord);
+            rs_setRawRecord(table, record, rawRecord);
         }
     }
     char msg[64];
@@ -507,7 +507,7 @@ TEST(RandomDataWrite, getRecordRetrievesExactlyWhatSetRecordWroteOnFullEeWrite) 
                 rawRecord[i] = nextByte();
             }
             snprintf(msg, 64, "table=%u record=%u seed=%u", table, record, seed0);
-            MEMCMP_EQUAL_TEXT(rawRecord, rs_getRecord(table, record), recSize, msg);
+            MEMCMP_EQUAL_TEXT(rawRecord, rs_getRawRecord(table, record), recSize, msg);
         }
     }
 }

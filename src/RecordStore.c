@@ -37,6 +37,7 @@
 #include <assert.h>
 #include "RecordStore.h"
 #include "EeHw.h"
+#include "BitUtils.h"
 
 
 // absolute maximum values:
@@ -44,14 +45,16 @@
 #define MAX_NUM_RECORDS 250
 #define MAX_RECORD_SIZE 250
 
-#define TABLE_CATALOG_ROW_SIZE (2 * sizeof(eeAddress_t) + 2 * sizeof(uint8_t))
+// storage addresses and offsets:
 #define ADDR_NUM_TABLES 0
 #define ADDR_TABLE_CATALOG 1
-#define RECORD_INDEX_OFFSET 0
-#define RECORD_DATA_OFFSET 2
-#define RECORD_SIZE_OFFSET 4
-#define MAX_NUM_RECORDS_OFFSET 5
+#define RECORD_INDEX_OFFSET     0
+#define RECORD_DATA_OFFSET      (1 * sizeof(eeAddress_t))
+#define RECORD_SIZE_OFFSET      (2 * sizeof(eeAddress_t))
+#define MAX_NUM_RECORDS_OFFSET  (2 * sizeof(eeAddress_t) + 1)
+#define TABLE_CATALOG_ROW_SIZE  (2 * sizeof(eeAddress_t) + 2)
 
+//
 #define NO_RECORD_INDEX 0xFF
 #define MAX_NUM_RECORDS_REACHED 0xFF
 #define NO_FREE_RECORD_FOUND 0xFF
@@ -89,7 +92,8 @@ static void storeNumTables(const uint8_t numTables);
 static uint8_t loadNumTables(void);
 static bool isTableSeparatorByte(const eeAddress_t eeAddress);
 
-static eeAddress_t getDataAddress(tableDescriptorT* tableRow, const uint8_t record);
+static eeAddress_t getDataAddress(tableDescriptorT* tableRow,
+                                  const uint8_t record);
 static uint16_t getDataAreaSize(tableDescriptorT* tableRow);
 
 static uint8_t insertRecordAt(tableDescriptorT* tableRow,
@@ -115,10 +119,6 @@ static bool recordIsFree(tableDescriptorT* tableRow,
 static void assertTableExists(const uint8_t table);
 static void assertRecordExists(const uint8_t table,
                                const uint8_t record);
-
-//TODO: move to generic library
-static uint8_t getByteIndex(const uint8_t record);
-static uint8_t getBitMask(const uint8_t record);
 
 
 bool rs_tryToOpenRecordStore(const uint8_t numTables) {
@@ -154,10 +154,10 @@ static void loadTableCatalog(void) {
     for (uint8_t table = 0; table < NumTables; table++) {
         tableRow = &TableCatalog[table];
         tableRow->recordIndexAddress = eeReadUint16(address + RECORD_INDEX_OFFSET);
-        tableRow->recordDataAddress =  eeReadUint16(address + RECORD_DATA_OFFSET);
-        tableRow->recordSize =         eeReadUint8( address + RECORD_SIZE_OFFSET);
-        tableRow->maxNumRecords =      eeReadUint8( address + MAX_NUM_RECORDS_OFFSET);
-        tableRow->numRecords = getNumRecordsFromIndex(tableRow);
+        tableRow->recordDataAddress  = eeReadUint16(address + RECORD_DATA_OFFSET);
+        tableRow->recordSize         = eeReadUint8( address + RECORD_SIZE_OFFSET);
+        tableRow->maxNumRecords      = eeReadUint8( address + MAX_NUM_RECORDS_OFFSET);
+        tableRow->numRecords         = getNumRecordsFromIndex(tableRow);
         address += TABLE_CATALOG_ROW_SIZE;
     }
 }
@@ -210,12 +210,12 @@ static bool isTableCatalogValid(void) {
         // check recordData start address:
         if ( tableRow->recordDataAddress != address) return false;
         // check recordData start byte:
-        if (!isTableSeparatorByte(address-1)) return false;
+        if (!isTableSeparatorByte(address - 1)) return false;
 
         address += getDataAreaSize(tableRow) + 1;
     }
     // check last recordData closing byte:
-    return isTableSeparatorByte(address-1);
+    return isTableSeparatorByte(address - 1);
 }
 
 
@@ -239,7 +239,7 @@ static bool recordIndexIsNotUsed(tableDescriptorT* tableRow,
 // only for testing - should never be used in production
 void rs_closeTableCatalog(void) {
     if (TableCatalog) {
-        for (uint8_t table=0; table < NumTables; table++) {
+        for (uint8_t table = 0; table<NumTables; table++) {
             if (TableCatalog[table].recordDataBuffer) {
                 free(TableCatalog[table].recordDataBuffer);
             }
@@ -268,13 +268,14 @@ uint8_t rs_createTable(const uint8_t maxNumRecords,
                        const uint8_t recordSize) {
     assert(maxNumRecords > 0 && maxNumRecords <= MAX_NUM_RECORDS);
     assert(recordSize > 0 && recordSize <= MAX_RECORD_SIZE);
+
     for (uint8_t table = 0; table < NumTables; table++) {
         if (TableCatalog[table].maxNumRecords == 0) {
             createTable(table, maxNumRecords, recordSize);
             return table;
         }
     }
-    assert( 0 && "too many tables");
+    assert(0 && "too many tables");
 }
 
 
@@ -295,14 +296,14 @@ static void createTable(const uint8_t table,
     if (table > 0) {
         tableDescriptorT* previousRow = &TableCatalog[table-1];
         recordIndexAddress = previousRow->recordDataAddress
-                                            + getDataAreaSize(previousRow) + 1;
+                             + getDataAreaSize(previousRow) + 1;
     } else {
         recordIndexAddress = NumTables * TABLE_CATALOG_ROW_SIZE + 2;
     }
     eeAddress_t recordDataAddress = recordIndexAddress + maxNumRecords + 1;
     eeAddress_t endByteAddress = recordDataAddress
-                                    + (uint16_t)(recordSize * maxNumRecords);
-    assertEeAddressExists(endByteAddress); // NOTE: use disableAssert() for testing
+                                 + (uint16_t)(recordSize * maxNumRecords);
+    assertEeAddressExists(endByteAddress); // NOTE: use disableAssert() for testing end byte algorthm
     tableRow->recordIndexAddress = recordIndexAddress;
     tableRow->recordDataAddress = recordDataAddress;
     tableRow->recordSize = recordSize;
@@ -344,7 +345,7 @@ static uint16_t getDataAreaSize(tableDescriptorT* tableRow) {
 // NOTE: no error checking, system must have plenty of RAM
 static void allocateRecordDataBuffers(void) {
     tableDescriptorT* tableRow;
-    for (uint8_t table=0; table < NumTables; table++) {
+    for (uint8_t table = 0; table < NumTables; table++) {
         tableRow = &TableCatalog[table];
         tableRow->recordDataBuffer = calloc(tableRow->recordSize, sizeof(uint8_t));
     }
@@ -354,9 +355,9 @@ static void allocateRecordDataBuffers(void) {
 // NOTE: no error checking, system must have plenty of RAM
 static void allocateRecordInUseBitmap(void) {
     tableDescriptorT* tableRow;
-    for (uint8_t table=0; table < NumTables; table++) {
+    for (uint8_t table = 0; table < NumTables; table++) {
         tableRow = &TableCatalog[table];
-        uint8_t bitmapSize = (tableRow->maxNumRecords + 7) / 8;
+        uint8_t bitmapSize = bu_getNumBytes(tableRow->maxNumRecords);
         tableRow->recordInUseBitmap = calloc(bitmapSize, sizeof(uint8_t));
     }
 }
@@ -395,7 +396,7 @@ uint8_t rs_getNumRecords(const uint8_t table) {
 }
 
 
-void rs_setRecord(const uint8_t table,
+void rs_setRawRecord(const uint8_t table,
                   const uint8_t record,
                   uint8_t* rawRecord) {
     assertRecordExists(table, record);
@@ -406,8 +407,8 @@ void rs_setRecord(const uint8_t table,
 
 
 // Returns the pointer to the module-internal buffer array of this table.
-// The pointer remains valid for the program lifetime and must not be freed.
-uint8_t* rs_getRecord(const uint8_t table,
+// The pointer remains valid for the life of the program and must not be freed.
+uint8_t* rs_getRawRecord(const uint8_t table,
                       const uint8_t record) {
     assertRecordExists(table, record);
     tableDescriptorT* tableRow = &TableCatalog[table];
@@ -435,7 +436,7 @@ bool rs_deleteRecord(const uint8_t table,
 
 
 // removes all records and returns the number of deleted records
-uint8_t rs_deleteAllRecordsIn(const uint8_t table) {
+uint8_t rs_deleteAllRecords(const uint8_t table) {
     assertTableExists(table);
     tableDescriptorT* tableRow = &TableCatalog[table];
     for (uint8_t record = 0; record < tableRow->maxNumRecords; record++) {
@@ -473,7 +474,7 @@ static uint8_t insertRecordAt(tableDescriptorT* tableRow,
     uint8_t freeRecord = getNextFreeRecord(tableRow);
     // numRecords < maxNumRecords, so there MUST be a free record:
     assert(freeRecord != NO_FREE_RECORD_FOUND);
-    shiftRecordIndexUp(tableRow, index-1); //NOTE: index=0 is not a problem
+    shiftRecordIndexUp(tableRow, index - 1); //NOTE: index=0 is not a problem
     setRecordIndex(tableRow, index, freeRecord);
     markRecordInUse(tableRow, freeRecord);
 
@@ -504,7 +505,7 @@ static void shiftRecordIndexUp(tableDescriptorT* tableRow,
     for (uint8_t rec = tableRow->numRecords - 1; rec > record; rec--) {
         eeAddress_t eeAddress = tableRow->recordIndexAddress + rec;
         uint8_t index = eeReadUint8(eeAddress);
-        eeWriteUint8(eeAddress+1, index);
+        eeWriteUint8(eeAddress + 1, index);
     }
 }
 
@@ -514,7 +515,7 @@ static void shiftRecordIndexDown(tableDescriptorT* tableRow,
                                  const uint8_t record) {
     for (uint8_t rec = record; rec < tableRow->numRecords; rec++) {
         eeAddress_t eeAddress = tableRow->recordIndexAddress + rec;
-        uint8_t index = eeReadUint8(eeAddress+1);
+        uint8_t index = eeReadUint8(eeAddress + 1);
         if (rec >= tableRow->maxNumRecords - 1) { // FIXME: not covered by test
             index = NO_RECORD_INDEX;
         }
@@ -535,37 +536,25 @@ static uint8_t getNextFreeRecord(tableDescriptorT* tableRow) {
 
 static void markRecordInUse(tableDescriptorT* tableRow,
                             const uint8_t record) {
-    uint8_t byteIndex = getByteIndex(record);
-    uint8_t bitMask   = getBitMask(record);
+    uint8_t byteIndex = bu_getByteIndex(record);
+    uint8_t bitMask   = bu_getSingleBitMask(record);
     tableRow->recordInUseBitmap[byteIndex] |= bitMask;
 }
 
 
 static void markRecordFree(tableDescriptorT* tableRow,
                            const uint8_t record) {
-    uint8_t byteIndex = getByteIndex(record);
-    uint8_t bitMask   = getBitMask(record);
+    uint8_t byteIndex = bu_getByteIndex(record);
+    uint8_t bitMask   = bu_getSingleBitMask(record);
     tableRow->recordInUseBitmap[byteIndex] &= ~bitMask;
 }
 
 
 static bool recordIsFree(tableDescriptorT* tableRow,
                          const uint8_t record) {
-    uint8_t byteIndex = getByteIndex(record);
-    uint8_t bitMask   = getBitMask(record);
+    uint8_t byteIndex = bu_getByteIndex(record);
+    uint8_t bitMask   = bu_getSingleBitMask(record);
     return (tableRow->recordInUseBitmap[byteIndex] & bitMask) == 0;
-}
-
-
-//TODO: move to generic library
-static uint8_t getByteIndex(const uint8_t record) {
-    return record >> 3;      // record / 8
-}
-
-
-//TODO: move to generic library
-static uint8_t getBitMask(const uint8_t record) {
-    return (uint8_t)(1u << (record & 0x07)); // record % 8
 }
 
 

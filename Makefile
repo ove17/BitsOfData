@@ -10,6 +10,7 @@ PROJECT_DIR =	$(LIB_DIR)/BitsOfData
 SRC_DIR =	$(PROJECT_DIR)/src
 TEST_DIR =	$(PROJECT_DIR)/test
 MOCK_DIR = 	$(PROJECT_DIR)/mocks
+INCLUDE_DIRS =  $(PROJECT_DIR)/include
 
 # specify where the source code and includes are located
 INCLUDE_DIRS += $(SRC_DIR)
@@ -52,6 +53,7 @@ CPPUTEST_WARNINGFLAGS += -Wno-sign-conversion
 CPPUTEST_WARNINGFLAGS += -Wno-pedantic
 CPPUTEST_WARNINGFLAGS += -Wno-shadow
 CPPUTEST_WARNINGFLAGS += -Wno-missing-field-initializers
+CPPUTEST_WARNINGFLAGS += -Wno-missing-designated-field-initializers
 CPPUTEST_WARNINGFLAGS += -Wno-unused-parameter
 CPPUTEST_WARNINGFLAGS += -Wno-inconsistent-missing-destructor-override
 CPPUTEST_WARNINGFLAGS += -Wno-suggest-destructor-override
