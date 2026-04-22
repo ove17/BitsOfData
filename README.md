@@ -13,6 +13,7 @@ The focus is on small memory footprint and low-level control rather than ease-of
 ## Architecture
 This project provides a low-level RecordStore abstraction.
 It is intentionally designed as a building block rather than a complete, standalone database system.
+In addition, a RecordCodec is available for implementing columns in the records.
 
 Higher-level abstractions can be built on top of this layer (e.g. structured data access layers), but they are not part of this repository and are not required for its use.
 
