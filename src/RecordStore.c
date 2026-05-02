@@ -54,9 +54,8 @@
 #define MAX_NUM_RECORDS_OFFSET  (2 * sizeof(eeAddress_t) + 1)
 #define TABLE_CATALOG_ROW_SIZE  (2 * sizeof(eeAddress_t) + 2)
 
-//
+// FIXME: should these be public?
 #define NO_RECORD_INDEX 0xFF
-#define MAX_NUM_RECORDS_REACHED 0xFF
 #define NO_FREE_RECORD_FOUND 0xFF
 
 
@@ -237,9 +236,9 @@ static bool recordIndexIsNotUsed(tableDescriptorT* tableRow,
 
 
 // only for testing - should never be used in production
-void rs_closeTableCatalog(void) {
+void rs_closeRecordStore(void) {
     if (TableCatalog) {
-        for (uint8_t table = 0; table<NumTables; table++) {
+        for (uint8_t table = 0; table < NumTables; table++) {
             if (TableCatalog[table].recordDataBuffer) {
                 free(TableCatalog[table].recordDataBuffer);
             }
@@ -397,8 +396,8 @@ uint8_t rs_getNumRecords(const uint8_t table) {
 
 
 void rs_setRawRecord(const uint8_t table,
-                  const uint8_t record,
-                  uint8_t* rawRecord) {
+                     const uint8_t record,
+                     uint8_t* rawRecord) {
     assertRecordExists(table, record);
     tableDescriptorT* tableRow = &TableCatalog[table];
     eeAddress_t eeAddress = getDataAddress(tableRow, record);
@@ -409,7 +408,7 @@ void rs_setRawRecord(const uint8_t table,
 // Returns the pointer to the module-internal buffer array of this table.
 // The pointer remains valid for the life of the program and must not be freed.
 uint8_t* rs_getRawRecord(const uint8_t table,
-                      const uint8_t record) {
+                         const uint8_t record) {
     assertRecordExists(table, record);
     tableDescriptorT* tableRow = &TableCatalog[table];
     eeAddress_t eeAddress = getDataAddress(tableRow, record);
@@ -558,7 +557,9 @@ static bool recordIsFree(tableDescriptorT* tableRow,
 }
 
 
+//#include <stdio.h>
 static void assertTableExists(const uint8_t table) {
+//printf("#%i#\n", NumTables);
     assert(table < NumTables);
 }
 

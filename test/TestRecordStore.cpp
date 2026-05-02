@@ -77,7 +77,7 @@ TEST_GROUP(OpenRecordStore) {
     }
 
     void teardown() {
-        rs_closeTableCatalog();
+        rs_closeRecordStore();
     }
 };
 
@@ -151,7 +151,7 @@ TEST(OpenRecordStore, openTableCatalogUsesExistingRecordsToDetermineNumRecords) 
     rs_appendRecord(0); // 2nd
     rs_appendRecord(0); // 3rd
     BYTES_EQUAL(3, rs_getNumRecords(0));
-    rs_closeTableCatalog(); // "reboot"
+    rs_closeRecordStore(); // "reboot"
     rs_tryToOpenRecordStore(1);
     BYTES_EQUAL(3, rs_getNumRecords(0));
 }
@@ -170,7 +170,7 @@ TEST(OpenRecordStore, deleteTableCatalogCausesOpenRecordStoreToClearEe) {
     rs_deleteTableCatalog();
     LONGS_EQUAL(0, eeReadUint8(0));
     LONGS_EQUAL(8, eeReadUint8(1));
-    rs_closeTableCatalog(); // "reboot"
+    rs_closeRecordStore(); // "reboot"
     rs_tryToOpenRecordStore(1);
     LONGS_EQUAL(0xFF, eeReadUint8(0));
     LONGS_EQUAL(0xFF, eeReadUint8(1));
@@ -185,7 +185,7 @@ TEST_GROUP(CreateTables) {
     }
 
     void teardown() {
-        rs_closeTableCatalog();
+        rs_closeRecordStore();
     }
 };
 
@@ -233,11 +233,11 @@ TEST_GROUP(Records) {
     }
 
     void teardown() {
-        rs_closeTableCatalog();
+        rs_closeRecordStore();
     }
 
     void reboot() {
-        rs_closeTableCatalog();
+        rs_closeRecordStore();
         rs_tryToOpenRecordStore(1);
     }
 
@@ -475,7 +475,7 @@ TEST_GROUP(RandomDataWrite) {
     }
 
     void teardown() {
-        rs_closeTableCatalog();
+        rs_closeRecordStore();
     }
 };
 
@@ -497,6 +497,8 @@ TEST(RandomDataWrite, getRecordRetrievesExactlyWhatSetRecordWroteOnFullEeWrite) 
             rs_setRawRecord(table, record, rawRecord);
         }
     }
+    rs_closeRecordStore();
+    rs_tryToOpenRecordStore(6);
     char msg[64];
     seed = seed0;
     for (uint8_t table = 0; table < numTables; table++) {

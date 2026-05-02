@@ -46,9 +46,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define MAX_NUM_RECORDS_REACHED 0xFF
 
 bool rs_tryToOpenRecordStore(const uint8_t numTables);
-void rs_closeTableCatalog(void);    // for testing only!
+void rs_closeRecordStore(void);    // for testing only!
 void rs_commitTables(void);
 void rs_deleteTableCatalog(void);
 

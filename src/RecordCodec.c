@@ -1,6 +1,9 @@
 /*
  * RecordCodec.c
  *
+ * recordDefinition is irrelevant for this module: only minValue and maxValue are used
+ *
+ * Space for the output arrays must be allocated by the caller
  */
 
 #include <assert.h>
@@ -14,19 +17,18 @@ static uint8_t getNumBitsOfColumn(const BDB_recordT* recordDef,
                                   const uint8_t column);
 
 
-// NOTE: column type is irrelevant
+// returns compressed record size in bytes
 uint8_t rc_getRecordSize(const BDB_recordT* recordDef) {
     assert(recordDef->numColumns > 0);
+    assert(recordDef->numColumns <= MAX_NUM_COLUMNS);
     uint16_t numBits = 0;
     for (uint8_t col = 0; col < recordDef->numColumns; col++) {
         numBits += getNumBitsOfColumn(recordDef, col);
     }
-//    return (uint8_t)((numBits + 7) / 8);
     return bu_getNumBytes(numBits);
 }
 
 
-// NOTE: column type is irrelevant
 void rc_encodeRecord(const uint16_t recordData[],   // input (separate values)
                      uint8_t rawRecord[],           // output (packed)
                      const BDB_recordT* recordDef) {
@@ -43,7 +45,7 @@ void rc_encodeRecord(const uint16_t recordData[],   // input (separate values)
         bitBuffer = (bitBuffer << numBits) | value;
         bitsInBuffer += numBits;
 
-        // write full bytes to output array
+        // write full bytes to output array:
         while (bitsInBuffer >= 8) {
             bitsInBuffer -= 8;
             rawRecord[outIndex++] = (bitBuffer >> bitsInBuffer) & 0xFF;
@@ -56,7 +58,6 @@ void rc_encodeRecord(const uint16_t recordData[],   // input (separate values)
 }
 
 
-// NOTE: column type is irrelevant
 void rc_decodeRecord(const uint8_t rawRecord[], // input (packed)
                      uint16_t recordData[],     // output (separate values)
                      const BDB_recordT* recordDef) {

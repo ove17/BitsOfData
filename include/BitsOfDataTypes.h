@@ -10,16 +10,18 @@
 #include <stdbool.h>
 
 
+#define MAX_NUM_COLUMNS 6   // ADJUST VALUE AS REQUIRED, NEED 6 FOR PASSING TESTS
+
 typedef enum {
-    BDB_COLUMN_RECORD_TYPE,	// for variable records
+    BDB_COLUMN_RECORD_TYPE,	// for variable record typs
     BDB_COLUMN_INTEGER,
     BDB_COLUMN_INTEGER_ZEROVAL,	// prints a string instead of 0
     BDB_COLUMN_DECIMAL,
     BDB_COLUMN_CHAR,
     BDB_COLUMN_STRING,		// no data, points to CHAR's
-    BDB_COLUMN_SYMBOL,
-    BDB_COLUMN_KEY_VALUE,
-    BDB_COLUMN_KEY_VALUES,
+    BDB_COLUMN_SYMBOL_LIST,
+    BDB_COLUMN_STRING_LIST,
+    BDB_COLUMN_STRING_LISTS,
     BDB_COLUMN_REFERENCE,	// reference to a record (, column) in another table
     BDB_COLUMN_VIRTUAL,		// no data, column in another table
     //	BDB_NUM_COLUMN_TYPES
@@ -28,18 +30,18 @@ typedef enum {
 /*
  * General approach: custom type is preferred over extra parameters
  *
- g etValue	changeV*alue	printValue			parameters
- DB_COLUMN_RECORD_TYPE	recordType		ok			n/a			-
- DB_COLUMN_INTEGER			val			ok			ok			.leading0, .intMultiplier
- DB_COLUMN_INTEGER_ZEROVAL	val			ok			ok			.leading0, .zeroStr(default='0')
- DB_COLUMN_DECIMAL			int			ok			ok			.numDecimals, .decMultiplier
- DB_COLUMN_CHAR				int			ok			ok			.charSet
- DB_COLUMN_STRING			n/a			n/a			ok			.strFirstChar, .strLength
- DB_COLUMN_SYMBOL			int			ok			ok			.symbolListId
- DB_COLUMN_KEY_VALUE			int			ok			ok			.keyValueListId
- DB_COLUMN_KEY_VALUES		int			ok			ok			.keyValueListIds
- DB_COLUMN_REFERENCE		recordId		ok		target params	.refTable, refColumn(=string)
- DB_COLUMN_VIRTUAL			int			n/a			n/a			.targetColumn
+                         getValue   changeValue	 printValue		parameters
+ BDB_COLUMN_RECORD_TYPE	recordDef		ok			n/a			-
+ BDB_COLUMN_INTEGER			val			ok			ok			.leading0, .intMultiplier
+ BDB_COLUMN_INTEGER_ZEROVAL	val			ok			ok			.leading0, .zeroStr(default='0')
+ BDB_COLUMN_DECIMAL			int			ok			ok			.numDecimals, .decMultiplier
+ BDB_COLUMN_CHAR			int			ok			ok			.charSet
+ BDB_COLUMN_STRING			n/a			n/a			ok			.strFirstChar, .strLength
+ BDB_COLUMN_SYMBOL_LIST		int			ok			ok			.symbolListId
+ BDB_COLUMN_STRING_LIST		int			ok			ok			.keyValueListId
+ BDB_COLUMN_STRING_LISTS	int			ok			ok			.keyValueListIds
+ BDB_COLUMN_REFERENCE		recordId	ok		target params	.refTable, refColumn(=string)
+ BDB_COLUMN_VIRTUAL			n/a			n/a			n/a			.targetColumn
 
  *
  */
@@ -50,7 +52,11 @@ typedef struct {
     BDB_colTypeT colType;
     uint16_t minValue; // default = 0
     uint16_t maxValue;
-    union {
+    uint16_t defaultVal;
+//TODO: either the following, OR separate colType structs for each columnType ?
+            //OR: only colType and externally manage its properties (does not feel good...)
+            // SHOULD sprintRecord/value live in a separate module?
+/*    union {
         struct { 	 // INTEGER:
 //            uint8_t intMultiplier;	// necessary?
             bool    intLeading0;
@@ -88,31 +94,41 @@ typedef struct {
             uint8_t virtualRecordColumn; // REFERENCE_COLUMN in this table
             uint8_t virtualValueColumn; // alternative column in the reference table
         };
-    };
+    };*/
 } BDB_columnT;
 
 
-// recordType determines display format!!
+// recordDef (also) determines display format!!
 //	NOTE: so settings can be record(type)s, rather than columns! Fewer exceptions!
 typedef struct {
     uint8_t numColumns;
-    uint8_t formatString;   // id of (translatable) string
-    BDB_columnT columns[];   // pointer to array of column definitions
+//    uint8_t formatString;   // TODO id of (translatable) string
+                                // AND how does this fit here? or elsewhere?
+    BDB_columnT columns[MAX_NUM_COLUMNS];   // pointer to array of column definitions
 } BDB_recordT;
 
 
+/*
+ * There are 2 scenarios:
+ * 1) the table has only 1 type of record:
+ *      - numRecordDefs = 1
+ *      - recordDefs[0] is the definition of its record
+ * 2) the table has a variable record type:
+ *      - numRecordDefs > 1
+ *      - recordDef[] holds an array of record definitions
+ */
 typedef struct {
     uint8_t maxNumRecords;
-//    uint8_t recordSize; // in bytes FIXME: komt uit RecordCodec:getRecordSize
-    uint8_t recordTypeColumnIndex; // eg 0xFF = FIXED_RECORD_TYPE (TODO: nodig?)
-    // FIXME: numRecordTypes = necessary
-    BDB_recordT* recordTypes; // ptr to array of record types
+    uint8_t numRecordDefs;
+    const BDB_recordT* recordDefs;
 } BDB_tableT;
+
 
 
 typedef struct {
     uint8_t numTables;
-    BDB_tableT tables[];
+    const BDB_tableT* tables;
 } BDB_dbaseDefT;
+
 
 #endif

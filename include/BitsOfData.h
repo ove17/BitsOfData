@@ -21,11 +21,11 @@
  *
  * implementation of records
  * 		every record in a table has the same length in bytes
- * 		a record has a recordType that defines its colum types
- * 		if there is a single recordType definition, all records have this type
- * 		in case of multiple recordType definitions, it is a variable recordType table:
- * 			recordType must be the first column
- * 			record size must fit the biggest recordType
+ * 		a record has a recordDef that defines its colum types
+ * 		if there is a single recordDef definition, all records have this type
+ * 		in case of multiple recordDef definitions, it is a variable recordDef table:
+ * 			recordDef must be the first column
+ * 			record size must fit the biggest recordDef
  *		possibly the record size in bytes could be hardcoded (instead of inferred)
  *
  * implementation of columns
@@ -47,23 +47,29 @@
 #include "BitsOfDataTypes.h"
 
 
-void BDB_openDataBase(const BDB_dbaseDefT* dbaseDef);
+bool BDB_openDataBase(const BDB_dbaseDefT* dbaseDef);
+void BDB_closeDataBase();
 
+uint16_t BDB_getValue(const uint8_t tableId,
+					  const uint8_t recordId,
+					  const uint8_t columnId);
 bool BDB_setValue(const uint8_t tableId,
 				  const uint8_t recordId,
 				  const uint8_t columnId,
 				  const uint16_t value);
-uint32_t BDB_getValue(const uint8_t tableId,
-					  const uint8_t recordId,
-					  const uint8_t columnId);
-// returns 0 if value did not change:
 bool BDB_changeValue(const uint8_t tableId,
 					 const uint8_t recordId,
 					 const uint8_t columnId,
-					 const uint16_t delta);
+					 const int16_t delta);
+void BDB_storeRecord(const uint8_t tableId,
+					 const uint8_t recordId);
 
 uint8_t BDB_getNumRecords(const uint8_t table);
 
+/*uint8_t BDB_getNumColumns(const uint8_t table,	// NECESSARY - NO!
+						  const uint8_t record);*/
+
+/*
 char* BDB_sPrintValue(const uint8_t tableId, // TODO: is this fn necessary?
 					  const uint8_t recordId,
 					  const uint8_t columnId);
@@ -81,7 +87,9 @@ bool BDB_deleteRecord(const uint8_t tableId,
 bool BDB_canRecordBeInsertedAfter(const int8_t tableId,
 								  const uint8_t record);
 
-// returns 0 if record was not inserted
+*/
+
+// returns true if record was inserted
 bool BDB_insertRecordAfter(const int8_t tableId,
 						   const uint8_t record);
 
