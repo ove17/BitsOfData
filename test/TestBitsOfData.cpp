@@ -30,12 +30,14 @@ TEST_GROUP(OpenDbase) {
     }
 };
 
+static const uint8_t maxNumRecordsInTable2 = 15;
 
 static const BDB_recordT recordDef = {
-    .numColumns = 2,
+    .numColumns = 3,
     .columns = {
         {.maxValue = 8, .defaultVal = 7, .minValue = 3},
         {.maxValue = 4000, .defaultVal = 1234},
+        {.colType = BDB_COLUMN_REFERENCE, .refTable = 2, .maxValue = maxNumRecordsInTable2 - 1,},
     },
 };
 static const BDB_recordT recordDefs0[] = {recordDef};
@@ -69,10 +71,11 @@ static const BDB_recordT recordDef0 = {
     },
 };
 static const BDB_recordT recordDef1 = {
-    .numColumns = 2,
+    .numColumns = 3,
     .columns = {
         recordTypeColumn,
-        {.maxValue = 85, .defaultVal = 45, .minValue = 5}
+        {.maxValue = 85, .defaultVal = 45, .minValue = 5},
+        {.colType = BDB_COLUMN_REFERENCE, .refTable = 2, .maxValue = maxNumRecordsInTable2 - 1,},
     },
 };
 static const BDB_recordT recordDefs1[] = {recordDef0, recordDef1};
@@ -83,9 +86,24 @@ static const BDB_tableT table1 = {
     .recordDefs = recordDefs1
 };
 
-static const BDB_tableT tables[] = { table0, table1};
+
+static const BDB_recordT recordDef2 = {
+    .numColumns = 1,
+    .columns = {
+        {.maxValue = 255,},
+    },
+};
+static const BDB_recordT recordDefs2[] = {recordDef2};
+static const BDB_tableT table2 = {
+    .maxNumRecords = maxNumRecordsInTable2,
+    .numRecordDefs = 1,
+    .recordDefs = recordDefs2
+};
+
+
+static const BDB_tableT tables[] = { table0, table1, table2};
 static const BDB_dbaseDefT dbaseDef = {
-    .numTables = 2,
+    .numTables = 3,
     .tables = tables
 };
 
@@ -118,23 +136,6 @@ TEST(OpenDbase, getNumRecordsReturns2onNewVarRecordTableWithExtraRecord) {
     BDB_openDataBase(&dbaseDef);
     BDB_insertRecordAfter(1, 0);
     BYTES_EQUAL(2, BDB_getNumRecords(1));
-}
-
-
-TEST(OpenDbase, insertRecordCreatesDefaultRecord) {
-    BDB_openDataBase(&dbaseDef);
-    BDB_insertRecordAfter(0, 0);
-    LONGS_EQUAL(1234, BDB_getValue(0, 1, 1));
-}
-
-
-TEST(OpenDbase, insertRecordAfterReturnsFalseIfMaxNumRecordsReached) {
-    BDB_openDataBase(&dbaseDef);
-    for (uint8_t rec = 0; rec < 9; rec++) {
-        CHECK_TRUE(BDB_insertRecordAfter(0, 0));
-    }
-    BYTES_EQUAL(10, BDB_getNumRecords(0));
-    CHECK_FALSE(BDB_insertRecordAfter(0, 0));
 }
 
 
@@ -271,7 +272,17 @@ TEST(OpenDbase, changeValueDownBy100IfItIs50AboveMinSucceedsAndSubtrackts50) {
 }
 
 
-// multiple recordDefs
+TEST(OpenDbase, retrievingDifferentRecordsInTheSameTableConsecutivelyWorks) {
+    BDB_openDataBase(&dbaseDef);
+    BDB_insertRecordAfter(0, 0);
+    CHECK_TRUE(BDB_setValue(0, 0, 0, 4));
+    CHECK_TRUE(BDB_setValue(0, 1, 0, 6));
+    BYTES_EQUAL(4, BDB_getValue(0, 0, 0));
+    BYTES_EQUAL(6, BDB_getValue(0, 1, 0));
+}
+
+
+// variable recordDefs
 
 
 TEST(OpenDbase, inVariableRecordDefTable_The1stColumnHoldsTheRecordDef) {
@@ -331,6 +342,16 @@ TEST(OpenDbase, inVariableRecordDefTable_changeValueSetsToMaxWhenItWouldExceed) 
     CHECK_TRUE(BDB_changeValue(1, 0, 0, 2));
     LONGS_EQUAL(1, BDB_getValue(1, 0, 0));
     LONGS_EQUAL(45, BDB_getValue(1, 0, 1));
+}
+
+
+TEST(OpenDbase, inVariableRecordDefTableRetrievingRecordWithDifferentTypesConsecutivelyWorks) {
+    BDB_openDataBase(&dbaseDef);
+    BDB_insertRecordAfter(1, 0);
+    CHECK_TRUE(BDB_setValue(1, 0, 0, 0)); // set recordType to 0
+    CHECK_TRUE(BDB_setValue(1, 1, 0, 1)); // set recordType to 1
+    BYTES_EQUAL( 45, BDB_getValue(1, 1, 1)); // default value
+    BYTES_EQUAL(150, BDB_getValue(1, 0, 1)); // default value
 }
 
 
@@ -437,24 +458,190 @@ TEST(OpenDbase, changingToAnotherRecordDoesNotStoreIfValueWasNotEdited) {
     BDB_setValue(0, 0, 0, 6);
     BDB_setValue(0, 1, 0, 5);   // must store rec0=6
     LONGS_EQUAL(6, BDB_getValue(0, 0, 0)); // must store rec1=5
-
     uint8_t rec[5] = {0, 0, 0, 0};
     rs_setRawRecord(0, 0, rec);    // set rec0 to 0 (=3, min)
-
     LONGS_EQUAL(5, BDB_getValue(0, 1, 0)); // must not store rec0
-    LONGS_EQUAL(3, BDB_getValue(0, 0, 0));
+    LONGS_EQUAL(3, BDB_getValue(0, 0, 0)); // rec0 is still 0
 }
+
+
+// adding records
+
+
+TEST(OpenDbase, insertRecordCreatesDefaultRecord) {
+    BDB_openDataBase(&dbaseDef);
+    BDB_insertRecordAfter(0, 0);
+    LONGS_EQUAL(1234, BDB_getValue(0, 1, 1));
+}
+
+
+TEST(OpenDbase, insertRecordAfterReturnsFalseIfMaxNumRecordsReached) {
+    BDB_openDataBase(&dbaseDef);
+    for (uint8_t rec = 0; rec < 9; rec++) {
+        CHECK_TRUE(BDB_insertRecordAfter(0, 0));
+    }
+    BYTES_EQUAL(10, BDB_getNumRecords(0));
+    CHECK_FALSE(BDB_insertRecordAfter(0, 0));
+}
+
+
+TEST(OpenDbase, canRecordBeAddedReturnsTrueIfThereIsOnly1Record) {
+    BDB_openDataBase(&dbaseDef);
+    CHECK_TRUE(BDB_canRecordBeAdded(0));
+}
+
+
+TEST(OpenDbase, canRecordBeAddedReturnsTrueIfThereAre1FewerThanMaxRecords) {
+    BDB_openDataBase(&dbaseDef);
+    for (uint8_t rec = 1; rec < 9; rec++) {
+        CHECK_TRUE(BDB_insertRecordAfter(0, 0));
+    }
+    CHECK_TRUE(BDB_canRecordBeAdded(0));
+}
+
+
+TEST(OpenDbase, canRecordBeAddedReturnsFalseeIfThereAreMaxRecords) {
+    BDB_openDataBase(&dbaseDef);
+    for (uint8_t rec = 1; rec < 10; rec++) {
+        CHECK_TRUE(BDB_insertRecordAfter(0, 0));
+    }
+    CHECK_FALSE(BDB_canRecordBeAdded(0));
+}
+
+
+// deleting records
+
+
+TEST(OpenDbase, deleteRecordReturnsTrueIfRecordWasDeleted) {
+    BDB_openDataBase(&dbaseDef);
+    rs_appendRecord(0);
+    CHECK_TRUE(BDB_deleteRecord(0, 0));
+}
+
+
+TEST(OpenDbase, deleteRecordReturnsFalseIfThereIsOnly1Record) {
+    BDB_openDataBase(&dbaseDef);
+    CHECK_FALSE(BDB_deleteRecord(0, 0));
+}
+
+
+TEST(OpenDbase, deleteRecordDeletesRecord) {
+    BDB_openDataBase(&dbaseDef);
+    rs_appendRecord(0);
+    BDB_deleteRecord(0, 0);
+    BYTES_EQUAL(1, BDB_getNumRecords(0));
+}
+
+
+TEST(OpenDbase, canRecordBeDeleted_ReturnsFalseIfItWasTheLastRecord) {
+    BDB_openDataBase(&dbaseDef);
+    CHECK_FALSE(BDB_canRecordBeDeleted(0, 0));
+}
+
+
+TEST(OpenDbase, canRecordBeDelete_dReturnsTrueIfItHasNoDependencies) {
+    BDB_openDataBase(&dbaseDef);
+    rs_appendRecord(0);
+    CHECK_TRUE(BDB_canRecordBeDeleted(0, 1));
+}
+
+
+TEST(OpenDbase, canRecordBeDeteted_ReturnsFalseIfAnotherRecordReferencesIt) {
+    BDB_openDataBase(&dbaseDef);
+    rs_appendRecord(0);
+    rs_appendRecord(2);
+    rs_appendRecord(2);
+    CHECK_TRUE(BDB_setValue(0, 1, 2, 1)); // 0,1,2 points to recordId 1 (in table 2)
+    CHECK_FALSE(BDB_canRecordBeDeleted(2, 1));  // so table 2, record 1 cannot be deleted
+}
+
+
+TEST(OpenDbase, canRecordBeDeteted_ReturnsFalseIf_ItIsReferencedFromAVariableRecord) {
+    BDB_openDataBase(&dbaseDef);
+    rs_appendRecord(1);
+    rs_appendRecord(2);
+    rs_appendRecord(2);
+    CHECK_TRUE(BDB_setValue(1, 1, 0, 1)); // set recordType to 1
+    CHECK_TRUE(BDB_setValue(1, 1, 2, 2)); // 1,1,2 points to recordId 2 (in table 2)
+    CHECK_FALSE(BDB_canRecordBeDeleted(2, 2));  // so table 2, record 2 cannot be deleted
+}
+
+
+// BDB_COLUMN_REFERENCE
+
+
+TEST(OpenDbase, setValueOfReferenceColumn_ToExistingRecord_InRefTableSucceeds) {
+    BDB_openDataBase(&dbaseDef);
+    CHECK_TRUE(BDB_setValue(0, 0, 2, 0));
+}
+
+
+TEST(OpenDbase, setValueOfReferenceColumnToNonExistingRecordInRefTableFails) {
+    BDB_openDataBase(&dbaseDef);
+    CHECK_FALSE(BDB_setValue(0, 0, 2, 1));
+}
+
+
+TEST(OpenDbase, changeValueOnReferenceColumnToExistingRecordInRefTableSucceeds) {
+    BDB_openDataBase(&dbaseDef);
+    rs_appendRecord(2);
+    rs_appendRecord(2);
+    CHECK_TRUE(BDB_changeValue(0, 0, 2, 2));
+}
+
+
+TEST(OpenDbase, changeValueOnReferenceColumnToNonExistingRecordInRefTableFails) {
+    BDB_openDataBase(&dbaseDef);
+    rs_appendRecord(2);
+    rs_appendRecord(2);
+    CHECK_TRUE(BDB_changeValue(0, 0, 2, 2));
+    CHECK_FALSE(BDB_changeValue(0, 0, 2, 1));
+}
+
+
+TEST(OpenDbase, changeValueOnReferenceColumn_ToExistingRecordInRefTable_SetsValueToNumRecords) {
+    BDB_openDataBase(&dbaseDef);
+    rs_appendRecord(2);
+    rs_appendRecord(2);
+    CHECK_TRUE(BDB_changeValue(0, 0, 2, 5));
+    BYTES_EQUAL(3, BDB_getNumRecords(2));
+    BYTES_EQUAL(2, BDB_getValue(0,0,2));
+}
+
+
+TEST(OpenDbase, deletingALowerRecordInTheRefTableAdjustssRecordReference) {
+    BDB_openDataBase(&dbaseDef);
+    rs_appendRecord(2); // table 2, record 1
+    rs_appendRecord(2); // table 2, record 2
+    CHECK_TRUE(BDB_setValue(0, 0, 2, 1)); // references table 2, record 1
+    BDB_deleteRecord(2, 0); // 0,0,2 should now referece table 2, record 0
+    BYTES_EQUAL(0, BDB_getValue(0, 0, 2));
+}
+
+
+TEST(OpenDbase, insertingALowerRecordInTheRefTableAdjustsRecordReference) {
+    BDB_openDataBase(&dbaseDef);
+    rs_appendRecord(2); // table 2, record 1
+    rs_appendRecord(2); // table 2, record 2
+    CHECK_TRUE(BDB_setValue(0, 0, 2, 1)); // references table 2, record 1
+    BDB_insertRecordAfter(2, 0); // 0,0,2 should now referece table 2, record 2
+    BYTES_EQUAL(2, BDB_getValue(0, 0, 2));
+}
+
 
 
 /* TODO:
  *
- * 5 relations
- * 6 virtualColumn
- * 7 stringColumn
+ * 6 charColumn
+ * 6 stringColumn
+ * 7 virtualColumn
  *
  * 8 (sPrintValue)
  * 9 sPrintRecord
- *
  * 10 all recordDefs
+ *
+ * import/export table
+ * import/export record
+ *      setRecord ipv setRawRecord ?
  *
  */

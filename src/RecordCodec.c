@@ -1,8 +1,6 @@
 /*
  * RecordCodec.c
  *
- * recordDefinition is irrelevant for this module: only minValue and maxValue are used
- *
  * Space for the output arrays must be allocated by the caller
  */
 
@@ -11,10 +9,27 @@
 #include <stdbool.h>
 #include "BitUtils.h"
 #include "BitsOfDataTypes.h"
+#include "RecordCodec.h"
 
 
 static uint8_t getNumBitsOfColumn(const BDB_recordT* recordDef,
                                   const uint8_t column);
+
+
+// returns the packed size of a record in bytes
+// if it has a variable record definition: the biggest is returned
+uint8_t rc_getMaxRecordSize(const BDB_tableT* tableDef) {
+    uint8_t numRecordDefs = tableDef->numRecordDefs;
+    uint8_t maxRecordSize = 0;
+    for (uint8_t recordDefId = 0; recordDefId < numRecordDefs; recordDefId++) {
+        const BDB_recordT* recordDef = &tableDef->recordDefs[recordDefId];
+        uint8_t recordSize = rc_getRecordSize(recordDef);
+        if (recordSize > maxRecordSize) {
+            maxRecordSize = recordSize;
+        }
+    }
+    return maxRecordSize;
+}
 
 
 // returns compressed record size in bytes
@@ -31,7 +46,14 @@ uint8_t rc_getRecordSize(const BDB_recordT* recordDef) {
 
 void rc_encodeRecord(const uint16_t recordData[],   // input (separate values)
                      uint8_t rawRecord[],           // output (packed)
-                     const BDB_recordT* recordDef) {
+                     const BDB_tableT* tableDef) {
+    const uint8_t numRecordDefs = tableDef->numRecordDefs;
+    uint8_t recordDefId = 0;
+    if (numRecordDefs > 1) {
+        recordDefId = (uint8_t)recordData[0];
+    }
+    const BDB_recordT* recordDef = &tableDef->recordDefs[recordDefId];
+
     uint32_t bitBuffer = 0;
     uint8_t bitsInBuffer = 0;
     uint8_t outIndex = 0;
@@ -60,7 +82,18 @@ void rc_encodeRecord(const uint16_t recordData[],   // input (separate values)
 
 void rc_decodeRecord(const uint8_t rawRecord[], // input (packed)
                      uint16_t recordData[],     // output (separate values)
-                     const BDB_recordT* recordDef) {
+                     const BDB_tableT* tableDef) {
+    const uint8_t numRecordDefs = tableDef->numRecordDefs;
+
+    uint8_t recordDefId = 0;
+    if (numRecordDefs > 1) { // need recordTypeId first
+        const BDB_recordT* tmpRecordDef = &tableDef->recordDefs[0];
+        uint8_t numBits = getNumBitsOfColumn(tmpRecordDef, 0);
+        uint8_t shift = 8 - numBits;
+        recordDefId = (uint8_t)((rawRecord[0] >> shift) & bu_truncateMask(numBits));
+    }
+    const BDB_recordT* recordDef = &tableDef->recordDefs[recordDefId];
+
     uint32_t bitBuffer = 0;
     uint8_t bitsInBuffer = 0;
     uint8_t inIndex = 0;

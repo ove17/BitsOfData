@@ -14,6 +14,7 @@ INCLUDE_DIRS =  $(PROJECT_DIR)/include
 
 # specify where the source code and includes are located
 INCLUDE_DIRS += $(SRC_DIR)
+INCLUDE_DIRS += $(PROJECT_DIR)/utils
 INCLUDE_DIRS += $(CPPUTEST_HOME)/include
 INCLUDE_DIRS += $(CPPUTEST_HOME)/include/Platforms/Gcc
 INCLUDE_DIRS += $(MOCK_DIR)
@@ -21,6 +22,7 @@ INCLUDE_DIRS += $(MOCK_DIR)
 #INCLUDE_DIRS += $(LIB_DIR)/Hardware/arch/X86
 
 SRC_DIRS +=	$(SRC_DIR)
+SRC_DIRS +=	$(PROJECT_DIR)/utils
 TEST_SRC_DIRS =	$(TEST_DIR)
 TEST_SRC_DIRS += $(MOCK_DIR)
 #TEST_SRC_DIRS += $(LIB_DIR)/Hardware/arch/X86

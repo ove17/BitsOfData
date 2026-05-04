@@ -19,7 +19,7 @@ TEST_GROUP(RecordCodec) {
 };
 
 
-
+//FIXME: rc_getRecordSize(tableDef)
 TEST(RecordCodec, getRecordSizeOnOneByteReturns1) {
     static const BDB_recordT recordDef = {
         .numColumns = 1,
@@ -88,7 +88,13 @@ TEST(RecordCodec, encodeRecordReturnsValueOnRecordWith8bitColumn) {
             {.maxValue = 255}
         },
     };
-    rc_encodeRecord(recordData, rawRecord, &recordDef);
+    static const BDB_recordT recordDefs[] = {recordDef};
+    BDB_tableT tableDef = {
+        .numRecordDefs = 1,
+        .recordDefs = recordDefs,
+    };
+
+    rc_encodeRecord(recordData, rawRecord, &tableDef);
     BYTES_EQUAL(value, rawRecord[0]);
 }
 
@@ -103,10 +109,16 @@ TEST(RecordCodec, encoding12bitsThenDecodingReturnsSame12bits) {
             {.maxValue = 4000}
         },
     };
-    rc_encodeRecord(recordData, rawRecord, &recordDef);
+    static const BDB_recordT recordDefs[] = {recordDef};
+    BDB_tableT tableDef = {
+        .numRecordDefs = 1,
+        .recordDefs = recordDefs,
+    };
+
+    rc_encodeRecord(recordData, rawRecord, &tableDef);
     rawRecord[1] &=  0b011110000;
     uint16_t recordDataOut[1] = { 0 };
-    rc_decodeRecord(rawRecord, recordDataOut, &recordDef);
+    rc_decodeRecord(rawRecord, recordDataOut, &tableDef);
     LONGS_EQUAL(value, recordDataOut[0]);
 }
 
@@ -125,9 +137,58 @@ TEST(RecordCodec, encodingMultipleColumnsThenDecodingReturnsSameColumnValues) {
             {.maxValue = 559},
         },
     };
-    rc_encodeRecord(recordData, rawRecord, &recordDef);
+    static const BDB_recordT recordDefs[] = {recordDef};
+    BDB_tableT tableDef = {
+        .numRecordDefs = 1,
+        .recordDefs = recordDefs,
+    };
+
+    rc_encodeRecord(recordData, rawRecord, &tableDef);
     rawRecord[6] &= 0b11110000; // wipe excess bits
     uint16_t recordDataOut[6] = { 0 };
-    rc_decodeRecord(rawRecord, recordDataOut, &recordDef);
+    rc_decodeRecord(rawRecord, recordDataOut, &tableDef);
     MEMCMP_EQUAL(recordData, recordDataOut, 2*6);
+}
+
+
+TEST(RecordCodec, encodingVariableRecordThenDecodingReturnsSame) {
+
+    uint16_t recordData1[] = {0, 100};
+    uint16_t recordData2[] = {1, 3000, 260};
+
+    uint8_t rawRecord[4] = {0};
+
+    static const BDB_recordT recordDef1 = {
+        .numColumns = 2,
+        .columns = {
+            {.colType = BDB_COLUMN_RECORD_TYPE, .maxValue = 1},
+            {.maxValue = 123}
+        },
+    };
+    static const BDB_recordT recordDef2 = {
+        .numColumns = 3,
+        .columns = {
+            {.colType = BDB_COLUMN_RECORD_TYPE, .maxValue = 1},
+            {.maxValue = 4000},
+            {.maxValue = 299}
+        },
+    };
+    static const BDB_recordT recordDefs[] = {recordDef1, recordDef2};
+    BDB_tableT tableDef = {
+        .numRecordDefs = 2,
+        .recordDefs = recordDefs,
+    };
+
+    rc_encodeRecord(recordData1, rawRecord, &tableDef);
+    uint16_t recordDataOut1[2] = { 0 };
+    rc_decodeRecord(rawRecord, recordDataOut1, &tableDef);
+    LONGS_EQUAL(0, recordDataOut1[0]);
+    LONGS_EQUAL(100, recordDataOut1[1]);
+
+    rc_encodeRecord(recordData2, rawRecord, &tableDef);
+    uint16_t recordDataOut2[3] = { 0 };
+    rc_decodeRecord(rawRecord, recordDataOut2, &tableDef);
+    LONGS_EQUAL(1, recordDataOut2[0]);
+    LONGS_EQUAL(3000, recordDataOut2[1]);
+    LONGS_EQUAL(260, recordDataOut2[2]);
 }

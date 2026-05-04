@@ -17,6 +17,10 @@ In addition, a RecordCodec is available for implementing columns in the records.
 
 Higher-level abstractions can be built on top of this layer (e.g. structured data access layers), but they are not part of this repository and are not required for its use.
 
+## Language
+
+The embedded code is written in C and all test code is in C++.
+
 ## Testing
 This project consists of two parts:
 - Embedded library code

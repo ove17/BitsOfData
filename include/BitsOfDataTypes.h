@@ -1,6 +1,7 @@
 /*
  * BitsOfDataTypes.h
  *
+ * Contains public types for defining a database.
  */
 
 #ifndef __bits_of_data_types_h__
@@ -10,38 +11,42 @@
 #include <stdbool.h>
 
 
-#define MAX_NUM_COLUMNS 6   // ADJUST VALUE AS REQUIRED, NEED 6 FOR PASSING TESTS
+#define MAX_NUM_COLUMNS 6   // FIXME: ADJUST VALUE AS REQUIRED, NEED 6 FOR PASSING TESTS
 
 typedef enum {
+    BDB_COLUMN_INTEGER,     // =0, so default
     BDB_COLUMN_RECORD_TYPE,	// for variable record typs
-    BDB_COLUMN_INTEGER,
-    BDB_COLUMN_INTEGER_ZEROVAL,	// prints a string instead of 0
-    BDB_COLUMN_DECIMAL,
-    BDB_COLUMN_CHAR,
-    BDB_COLUMN_STRING,		// no data, points to CHAR's
-    BDB_COLUMN_SYMBOL_LIST,
-    BDB_COLUMN_STRING_LIST,
-    BDB_COLUMN_STRING_LISTS,
+//    BDB_COLUMN_INTEGER_ZEROVAL,	// prints a string instead of 0
+//    BDB_COLUMN_INTEGER_MAXVAL,    // prints a string instead of the maximum value
+//    BDB_COLUMN_DECIMAL,
+//    BDB_COLUMN_CHAR,
+//    BDB_COLUMN_STRING,		// no data, points to CHAR's
+//    BDB_COLUMN_SYMBOL_LIST,
+//    BDB_COLUMN_STRING_LIST,
+//    BDB_COLUMN_STRING_LISTS,
     BDB_COLUMN_REFERENCE,	// reference to a record (, column) in another table
-    BDB_COLUMN_VIRTUAL,		// no data, column in another table
+//    BDB_COLUMN_VIRTUAL,		// no data, column in another table
     //	BDB_NUM_COLUMN_TYPES
 } BDB_colTypeT;
 
 /*
  * General approach: custom type is preferred over extra parameters
  *
+                                      setValue
                          getValue   changeValue	 printValue		parameters
- BDB_COLUMN_RECORD_TYPE	recordDef		ok			n/a			-
- BDB_COLUMN_INTEGER			val			ok			ok			.leading0, .intMultiplier
- BDB_COLUMN_INTEGER_ZEROVAL	val			ok			ok			.leading0, .zeroStr(default='0')
+ BDB_COLUMN_RECORD_TYPE	recordDefId		ok			n/a			-
+ BDB_COLUMN_INTEGER			int			ok			ok			.leading0
+ BDB_COLUMN_INTEGER_ZEROSTR	int			ok			ok			.zeroStr
+ BDB_COLUMN_INTEGER_MAXSTR	int			ok			ok			.maxStr
  BDB_COLUMN_DECIMAL			int			ok			ok			.numDecimals, .decMultiplier
  BDB_COLUMN_CHAR			int			ok			ok			.charSet
- BDB_COLUMN_STRING			n/a			n/a			ok			.strFirstChar, .strLength
  BDB_COLUMN_SYMBOL_LIST		int			ok			ok			.symbolListId
- BDB_COLUMN_STRING_LIST		int			ok			ok			.keyValueListId
- BDB_COLUMN_STRING_LISTS	int			ok			ok			.keyValueListIds
- BDB_COLUMN_REFERENCE		recordId	ok		target params	.refTable, refColumn(=string)
- BDB_COLUMN_VIRTUAL			n/a			n/a			n/a			.targetColumn
+ BDB_COLUMN_STRING_LIST		int			ok			ok			.strListId
+ BDB_COLUMN_STRING_LISTS	int			ok			ok			.strListIds
+ BDB_COLUMN_REFERENCE	 recordId	    ok		target params	.refTable, refColumn(=string)
+ // the following hold no data:
+ BDB_COLUMN_VIRTUAL		   value		n/a		  target		.targetColumn
+ BDB_COLUMN_STRING			n/a			n/a			ok			.strFirstChar, .strLength
 
  *
  */
@@ -53,15 +58,18 @@ typedef struct {
     uint16_t minValue; // default = 0
     uint16_t maxValue;
     uint16_t defaultVal;
-//TODO: either the following, OR separate colType structs for each columnType ?
-            //OR: only colType and externally manage its properties (does not feel good...)
-            // SHOULD sprintRecord/value live in a separate module?
-/*    union {
+/*TODO: either the following, OR separate colType structs for each columnType ?
+        OR: only colType and externally manage its properties (does not feel good...)
+        SHOULD sprintRecord/value live in a separate module?
+                PROBABLY!
+                SEPARATE formatting (leading0, decMultiplier, stringList) from dbase
+                    logic (refTable, virtualValueColumn)
+*/
+    union {
         struct { 	 // INTEGER:
-//            uint8_t intMultiplier;	// necessary?
             bool    intLeading0;
         };
-        struct { // INTEGER_ZEROVAL:
+/*        struct { // INTEGER_ZEROVAL:
     // TODO: apply offset after checking for int0string (inputNumber for trainTable)
             uint8_t int0String;	// string to display if value == 0
         };
@@ -85,16 +93,16 @@ typedef struct {
         struct { // STRING_LISTS
             uint8_t* stringLists;	//  list of (list of string ids)
             uint8_t stringListColumn;	// column that determines which list is used
-        };
+        };*/
         struct { // REFERENCE: data value = recordId in other table
             uint8_t refTable;
             uint8_t refColumn; // in the reference table, generally a string column
         };
-        struct { // VIRTUAL: points to a column in another table, NO DATA!
+/*        struct { // VIRTUAL: points to a column in another table, NO DATA!
             uint8_t virtualRecordColumn; // REFERENCE_COLUMN in this table
             uint8_t virtualValueColumn; // alternative column in the reference table
-        };
-    };*/
+        };*/
+    };
 } BDB_columnT;
 
 
@@ -115,7 +123,7 @@ typedef struct {
  *      - recordDefs[0] is the definition of its record
  * 2) the table has a variable record type:
  *      - numRecordDefs > 1
- *      - recordDef[] holds an array of record definitions
+ *      - recordDefs[] holds an array of record definitions
  */
 typedef struct {
     uint8_t maxNumRecords;
