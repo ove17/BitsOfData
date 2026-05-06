@@ -19,7 +19,17 @@ TEST_GROUP(RecordCodec) {
 };
 
 
-//FIXME: rc_getRecordSize(tableDef)
+TEST(RecordCodec, getRecordSizeOnZeroByteReturns0) {
+    static const BDB_recordT recordDef = {
+        .numColumns = 1,
+        .columns = {
+            {.maxValue = 0}
+        },
+    };
+    BYTES_EQUAL(0, rc_getRecordSize(&recordDef));
+}
+
+
 TEST(RecordCodec, getRecordSizeOnOneByteReturns1) {
     static const BDB_recordT recordDef = {
         .numColumns = 1,

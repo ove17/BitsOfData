@@ -25,7 +25,7 @@ typedef enum {
 //    BDB_COLUMN_STRING_LIST,
 //    BDB_COLUMN_STRING_LISTS,
     BDB_COLUMN_REFERENCE,	// reference to a record (, column) in another table
-//    BDB_COLUMN_VIRTUAL,		// no data, column in another table
+    BDB_COLUMN_VIRTUAL,		// no data, column in another table
     //	BDB_NUM_COLUMN_TYPES
 } BDB_colTypeT;
 
@@ -33,8 +33,8 @@ typedef enum {
  * General approach: custom type is preferred over extra parameters
  *
                                       setValue
-                         getValue   changeValue	 printValue		parameters
- BDB_COLUMN_RECORD_TYPE	recordDefId		ok			n/a			-
+                         getValue   changeValue	 printValue
+ BDB_COLUMN_RECORD_TYPE	recordDefId		ok			n/a
  BDB_COLUMN_INTEGER			int			ok			ok			.leading0
  BDB_COLUMN_INTEGER_ZEROSTR	int			ok			ok			.zeroStr
  BDB_COLUMN_INTEGER_MAXSTR	int			ok			ok			.maxStr
@@ -43,9 +43,9 @@ typedef enum {
  BDB_COLUMN_SYMBOL_LIST		int			ok			ok			.symbolListId
  BDB_COLUMN_STRING_LIST		int			ok			ok			.strListId
  BDB_COLUMN_STRING_LISTS	int			ok			ok			.strListIds
- BDB_COLUMN_REFERENCE	 recordId	    ok		target params	.refTable, refColumn(=string)
- // the following hold no data:
- BDB_COLUMN_VIRTUAL		   value		n/a		  target		.targetColumn
+ BDB_COLUMN_REFERENCE	    int   	    ok		   refCol       value = recordId in .refTable
+ // the following columns hold no data:
+ BDB_COLUMN_VIRTUAL		 targetCol		n/a		 targetCol
  BDB_COLUMN_STRING			n/a			n/a			ok			.strFirstChar, .strLength
 
  *
@@ -98,10 +98,10 @@ typedef struct {
             uint8_t refTable;
             uint8_t refColumn; // in the reference table, generally a string column
         };
-/*        struct { // VIRTUAL: points to a column in another table, NO DATA!
-            uint8_t virtualRecordColumn; // REFERENCE_COLUMN in this table
-            uint8_t virtualValueColumn; // alternative column in the reference table
-        };*/
+        struct { // VIRTUAL: holds no data, points to a column in another table
+            uint8_t virtRecordCol; // columnId of REFERENCE_COLUMN in the same table
+            uint8_t virtValueCol;  // columnId of target value in referenced table
+        };
     };
 } BDB_columnT;
 

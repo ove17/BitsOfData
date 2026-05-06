@@ -33,11 +33,13 @@ TEST_GROUP(OpenDbase) {
 static const uint8_t maxNumRecordsInTable2 = 15;
 
 static const BDB_recordT recordDef = {
-    .numColumns = 3,
+    .numColumns = 5,
     .columns = {
         {.maxValue = 8, .defaultVal = 7, .minValue = 3},
         {.maxValue = 4000, .defaultVal = 1234},
         {.colType = BDB_COLUMN_REFERENCE, .refTable = 2, .maxValue = maxNumRecordsInTable2 - 1,},
+        {.colType = BDB_COLUMN_VIRTUAL, .virtRecordCol = 2, .virtValueCol = 1},
+        {.maxValue = 3, .defaultVal = 2, .minValue = 2},
     },
 };
 static const BDB_recordT recordDefs0[] = {recordDef};
@@ -88,9 +90,10 @@ static const BDB_tableT table1 = {
 
 
 static const BDB_recordT recordDef2 = {
-    .numColumns = 1,
+    .numColumns = 2,
     .columns = {
         {.maxValue = 255,},
+        {.maxValue = 15,},
     },
 };
 static const BDB_recordT recordDefs2[] = {recordDef2};
@@ -629,19 +632,50 @@ TEST(OpenDbase, insertingALowerRecordInTheRefTableAdjustsRecordReference) {
 }
 
 
+// BDB_COLUMN_VIRTUAL
+
+
+TEST(OpenDbase, setValueFailsOnAVirtualColumn) {
+    BDB_openDataBase(&dbaseDef);
+    CHECK_FALSE(BDB_setValue(0, 0, 3, 0));
+}
+
+
+TEST(OpenDbase, changeValueFailsOnAVirtualColumn) {
+    BDB_openDataBase(&dbaseDef);
+    CHECK_FALSE(BDB_changeValue(0, 0, 3, 1));
+}
+
+
+TEST(OpenDbase, getValueOnAVirtualColumn_ReturnsValueOfTheReferencedTableColumn) {
+    BDB_openDataBase(&dbaseDef);
+    BDB_setValue(2, 0, 1, 8);
+    BYTES_EQUAL(8, BDB_getValue(0, 0, 3));
+}
+
+
+IGNORE_TEST(OpenDbase, anIntegerColumnAfterAVirtualColumnWorksCanBeSetAndGet) {
+    BDB_openDataBase(&dbaseDef);
+    BYTES_EQUAL(2, BDB_getValue(0, 0, 4));
+    BDB_setValue(0, 0, 4, 3);
+    BYTES_EQUAL(3, BDB_getValue(0, 0, 4));
+}
+
 
 /* TODO:
  *
+ * getValueOnAVirtualColumnThatRepresentsAStringFails
+ *
+ * implement:
+ *      import/export table
+ *      import/export record
+ *
  * 6 charColumn
  * 6 stringColumn
- * 7 virtualColumn
  *
  * 8 (sPrintValue)
  * 9 sPrintRecord
  * 10 all recordDefs
  *
- * import/export table
- * import/export record
- *      setRecord ipv setRawRecord ?
  *
  */
