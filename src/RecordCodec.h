@@ -16,6 +16,7 @@
 
 uint8_t rc_getMaxRecordSize(const BDB_tableT* tableDef);
 uint8_t rc_getRecordSize(const BDB_recordT* recordDef);
+bool rc_isVirtualColumn(const BDB_columnT* columnDef);
 
 void rc_encodeRecord(const uint16_t recordData[],   // input (separate values)
                      uint8_t rawRecord[],           // output (packed)

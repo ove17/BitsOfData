@@ -11,6 +11,7 @@
  */
 
 #include "CppUTest/TestHarness.h"
+#include "cpputestUtils.h"
 
 extern "C" {
     #include "EeHw.h"
@@ -142,7 +143,7 @@ TEST(OpenDbase, getNumRecordsReturns2onNewVarRecordTableWithExtraRecord) {
 }
 
 
-TEST(OpenDbase, newTableHas1recordWithDefaultColValues) {
+TEST(OpenDbase, newTableHasrecordWithDefaultColValues) {
     BDB_openDataBase(&dbaseDef);
     LONGS_EQUAL(7, BDB_getValue(0, 0, 0));
     LONGS_EQUAL(1234, BDB_getValue(0, 0, 1));
@@ -468,6 +469,41 @@ TEST(OpenDbase, changingToAnotherRecordDoesNotStoreIfValueWasNotEdited) {
 }
 
 
+// set/get records
+
+
+TEST(OpenDbase, getRecordOnSingleRecDefReturnsAllColumns) {
+    BDB_openDataBase(&dbaseDef);
+    uint16_t tab0rec[] = { 7, 1234, 0, 0xFFFF, 2 }; // NOTE: column 3 = not used
+    CHECK_UINT16_ARRAY_EQUAL(tab0rec, BDB_getRecord(0, 0), 5);
+}
+
+
+TEST(OpenDbase, getRecordOnVariableRecDefReturnsAllColumns) {
+    BDB_openDataBase(&dbaseDef);
+    BDB_insertRecordAfter(1, 0);
+    CHECK_TRUE(BDB_setValue(1, 0, 0, 0)); // set recordType to 0
+    CHECK_TRUE(BDB_setValue(1, 1, 0, 1)); // set recordType to 1
+
+    uint16_t rec1_0[] = { 0, 150, 0, 255};
+    CHECK_UINT16_ARRAY_EQUAL(rec1_0, BDB_getRecord(1, 0), 4);
+    uint16_t rec1_1[] = { 1, 45, 0, };
+    CHECK_UINT16_ARRAY_EQUAL(rec1_1, BDB_getRecord(1, 1), 3);
+}
+
+
+TEST(OpenDbase, setRecord) {
+    BDB_openDataBase(&dbaseDef);
+    BDB_insertRecordAfter(1, 0);
+    uint16_t rec1_0[] = { 0, 123, 75, 500};
+    BDB_setRecord(1, 0, rec1_0);
+    uint16_t rec1_1[] = { 1, 85, 0, };
+    BDB_setRecord(1, 1, rec1_1);
+    CHECK_UINT16_ARRAY_EQUAL(rec1_0, BDB_getRecord(1, 0), 4);
+    CHECK_UINT16_ARRAY_EQUAL(rec1_1, BDB_getRecord(1, 1), 3);
+}
+
+
 // adding records
 
 
@@ -654,7 +690,7 @@ TEST(OpenDbase, getValueOnAVirtualColumn_ReturnsValueOfTheReferencedTableColumn)
 }
 
 
-IGNORE_TEST(OpenDbase, anIntegerColumnAfterAVirtualColumnWorksCanBeSetAndGet) {
+TEST(OpenDbase, anIntegerColumnAfterAVirtualColumnWorksCanBeSetAndGet) {
     BDB_openDataBase(&dbaseDef);
     BYTES_EQUAL(2, BDB_getValue(0, 0, 4));
     BDB_setValue(0, 0, 4, 3);
@@ -662,13 +698,37 @@ IGNORE_TEST(OpenDbase, anIntegerColumnAfterAVirtualColumnWorksCanBeSetAndGet) {
 }
 
 
+TEST(OpenDbase, getValueOnAVirtualColumnThatRepresentsAStringFails) {
+    BDB_openDataBase(&dbaseDef);
+    BYTES_EQUAL(2, BDB_getValue(0, 0, 4));
+    BDB_setValue(0, 0, 4, 3);
+    BYTES_EQUAL(3, BDB_getValue(0, 0, 4));
+}
+
+
+// CHARS
+
+
+
 /* TODO:
  *
- * getValueOnAVirtualColumnThatRepresentsAStringFails
+ * stringValueOfIntReturnsStringWithMaxDigits // == numDigits of .maxValue
+ * stringValueOfIntWithLeading0ReturnsStringWithLeading0s
+ * stringValueOfIntWithoutLeading0ReturnsStringWithLeadingSpaces
  *
- * implement:
- *      import/export table
- *      import/export record
+ *
+ * useCharSet(charSet, sizeof(charSet))
+ *      assert(sizeof == .maxValue-2
+ *
+ * assertDBdef:
+ *      assert minValue=0
+ *      assert default=0
+ *
+ * getValueOnCharReturnsNumericValue
+ * setValueOnCharSetsNumericValue
+ * changeValueOnCharReturnsFalseWhenAtMax
+ * changeValueOnCharTruncatesWhenItWouldExceedMax
+ * stringValueOfCharReturnsChar
  *
  * 6 charColumn
  * 6 stringColumn

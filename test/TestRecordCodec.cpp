@@ -202,3 +202,36 @@ TEST(RecordCodec, encodingVariableRecordThenDecodingReturnsSame) {
     LONGS_EQUAL(3000, recordDataOut2[1]);
     LONGS_EQUAL(260, recordDataOut2[2]);
 }
+
+
+
+TEST(RecordCodec, encodeRecordSkipsVirtualColumn) {
+    uint8_t value1 = 0b01010101; // 0x55
+    uint8_t value2 = 0b10101010; // 0xAA
+    uint16_t recordData[3] = {value1, 0xFFFF, value2};
+
+    uint8_t rawRecordTarget[3] = {0};
+    rawRecordTarget[0] = value1;
+    rawRecordTarget[1] = value2;
+    static const BDB_recordT recordDef = {
+        .numColumns = 3,
+        .columns = {
+            {.maxValue = 255},
+            {.colType = BDB_COLUMN_VIRTUAL},
+            {.maxValue = 255}
+        },
+    };
+    static const BDB_recordT recordDefs[] = {recordDef};
+    BDB_tableT tableDef = {
+        .numRecordDefs = 1,
+        .recordDefs = recordDefs,
+    };
+
+    uint8_t rawRecord[3] = {0};
+    rc_encodeRecord(recordData, rawRecord, &tableDef);
+    MEMCMP_EQUAL(rawRecordTarget , rawRecord, 3);
+
+    uint16_t recordDataOut[3] = { 0 };
+    rc_decodeRecord(rawRecord, recordDataOut, &tableDef);
+    MEMCMP_EQUAL(recordData, recordDataOut, 3);
+}

@@ -46,8 +46,6 @@ bool BDB_changeValue(const uint8_t tableId,
 void BDB_storeRecord(const uint8_t tableId,
 					 const uint8_t recordId);
 
-
-
 /*
 char* BDB_sPrintValue(const uint8_t tableId, // TODO: is this fn necessary?
 					  const uint8_t recordId,
@@ -55,6 +53,12 @@ char* BDB_sPrintValue(const uint8_t tableId, // TODO: is this fn necessary?
 char* BDB_sPrintRecord(const uint8_t tableId,
 					   const uint8_t recordId);
 */
+
+uint16_t* BDB_getRecord(const uint8_t tableId,
+						const uint8_t recordId);
+void BDB_setRecord(const uint8_t tableId,
+				   const uint8_t recordId,
+				   const uint16_t* data);
 
 uint8_t BDB_getNumRecords(const uint8_t tableId);
 

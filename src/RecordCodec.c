@@ -17,7 +17,7 @@ static uint8_t getNumBitsOfColumn(const BDB_recordT* recordDef,
 
 
 // returns the packed size of a record in bytes
-// if it has a variable record definition: the biggest is returned
+// if it has a variable record definition: the biggest size is returned
 uint8_t rc_getMaxRecordSize(const BDB_tableT* tableDef) {
     uint8_t numRecordDefs = tableDef->numRecordDefs;
     uint8_t maxRecordSize = 0;
@@ -60,8 +60,8 @@ void rc_encodeRecord(const uint16_t recordData[],   // input (separate values)
 
     for (uint8_t col = 0; col < recordDef->numColumns; col++) {
         uint8_t numBits = getNumBitsOfColumn(recordDef, col);
-
-        uint32_t value = recordData[col] & bu_truncateMask(numBits);
+        uint16_t minVal = recordDef->columns[col].minValue;
+        uint32_t value = (recordData[col] - minVal) & bu_truncateMask(numBits);
 
         // add the entire value to the bitBuffer:
         bitBuffer = (bitBuffer << numBits) | value;
@@ -78,7 +78,6 @@ void rc_encodeRecord(const uint16_t recordData[],   // input (separate values)
         rawRecord[outIndex] = (bitBuffer << (8 - bitsInBuffer)) & 0xFF;
     }
 }
-
 
 void rc_decodeRecord(const uint8_t rawRecord[], // input (packed)
                      uint16_t recordData[],     // output (separate values)
@@ -105,13 +104,22 @@ void rc_decodeRecord(const uint8_t rawRecord[], // input (packed)
             bitBuffer = (bitBuffer << 8) | rawRecord[inIndex++];
             bitsInBuffer += 8;
         }
-
-        uint8_t shift = bitsInBuffer - numBits;
-        recordData[col] = (uint16_t)((bitBuffer >> shift) & bu_truncateMask(numBits));
+        if (rc_isVirtualColumn(&recordDef->columns[col])) {
+            recordData[col] = 0xFFFF;   // column value must not be used
+        } else {
+            uint8_t shift = bitsInBuffer - numBits;
+            uint16_t minVal = recordDef->columns[col].minValue;
+            recordData[col] = (uint16_t)((bitBuffer >> shift) & bu_truncateMask(numBits)) + minVal;
+        }
 
         bitsInBuffer -= numBits;
         bitBuffer &= bu_truncateMask(bitsInBuffer); // keep remaining bits
     }
+}
+
+
+bool rc_isVirtualColumn(const BDB_columnT* columnDef) {
+    return columnDef->colType == BDB_COLUMN_VIRTUAL || columnDef->colType == BDB_COLUMN_STRING;
 }
 
 

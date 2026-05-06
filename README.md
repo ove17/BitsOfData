@@ -11,11 +11,17 @@ The focus is on small memory footprint and low-level control rather than ease-of
 - Requires user-implemented storage drivers (e.g. EEPROM or other embedded storage devices)
 
 ## Architecture
-This project provides a low-level RecordStore abstraction.
-It is intentionally designed as a building block rather than a complete, standalone database system.
-In addition, a RecordCodec is available for implementing columns in the records.
+This project provides a simple API to access a basic database with a fixed schema. 
+Every table may consist of one or more records. Records can be inserted and deleted, up to a pre-defined maximum. The record definition (i.e. its columns) can be fixed for one table, but can also be variable. In that case the first column holds the record type.
+Every record may consist of one or more columns. Every column has a column type and a number of properties.
 
-Higher-level abstractions can be built on top of this layer (e.g. structured data access layers), but they are not part of this repository and are not required for its use.
+The following column types have been implemented:
+- integer (default)
+- record type - allows multiple record types in one table
+- reference - refers to a record in another table
+- virtual - holds no data: returns a column value from a referenced table
+
+The database schema is defined using the prototypes in BitsOfDataTypes.h, see TestBistsOfData.cpp for usage examples.
 
 ## Language
 

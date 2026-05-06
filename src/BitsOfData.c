@@ -260,9 +260,13 @@ static void setColumnsToDefaultValue(const uint8_t tableId,
 
 
 static uint16_t getDefaultValue(const BDB_columnT* columnDef) {
+    if (rc_isVirtualColumn(columnDef)) {
+        return 0xFFFF; // column value must not be used
+
+    }
     assert(columnDef->defaultVal >= columnDef->minValue);
     assert(columnDef->defaultVal <= columnDef->maxValue);
-    return columnDef->defaultVal - columnDef->minValue;
+    return columnDef->defaultVal;
 }
 
 
@@ -303,7 +307,7 @@ uint16_t BDB_getValue(const uint8_t tableId,
         uint8_t virtColumnId = columnDef->virtValueCol;
         return BDB_getValue(refTableId, virtRecordId, virtColumnId);
     }
-    return RecordBuffers[tableId].columns[columnId] + columnDef->minValue;
+    return RecordBuffers[tableId].columns[columnId];// + columnDef->minValue;
 }
 
 
@@ -317,11 +321,11 @@ bool BDB_setValue (const uint8_t tableId,
     const BDB_columnT* columnDef = &recordDef->columns[columnId];
     if (value < columnDef->minValue
             || value > getMaxValue(columnDef)
-            || columnDef->colType == BDB_COLUMN_VIRTUAL) {
+            || rc_isVirtualColumn(columnDef)) {
         return false;
     }
     fillRecordBuffer(tableId, recordId);
-    setValue(tableId, recordId, columnId, value - columnDef->minValue);
+    setValue(tableId, recordId, columnId, value);
     return true;
 }
 
@@ -339,7 +343,7 @@ bool BDB_changeValue(const uint8_t tableId,
     if (newValue == value) {
         return false;
     }
-    setValue(tableId, recordId, columnId, (uint16_t)(newValue - columnDef->minValue));
+    setValue(tableId, recordId, columnId, (uint16_t)(newValue));
     return true;
 }
 
@@ -378,6 +382,25 @@ static void storeRecordBuffer(const uint8_t tableId,
     recordBufferT* recordBuffer = &RecordBuffers[tableId];
     const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
     rc_encodeRecord(recordBuffer->columns, RawRecordBuffer, tableDef);
+    rs_setRawRecord(tableId, recordId, RawRecordBuffer);
+}
+
+
+//TODO: consider returning array WITHOUT virtual columns
+uint16_t* BDB_getRecord(const uint8_t tableId,
+                        const uint8_t recordId) {
+    fillRecordBuffer(tableId, recordId);
+    return RecordBuffers[tableId].columns;
+}
+
+
+//TODO: consider providing array WITHOUT virtual columns
+// consider adding numer of columns to check with expected (and to return false if it fails)
+void BDB_setRecord(const uint8_t tableId,
+                   const uint8_t recordId,
+                   const uint16_t* data) {
+    const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
+    rc_encodeRecord(data, RawRecordBuffer, tableDef);
     rs_setRawRecord(tableId, recordId, RawRecordBuffer);
 }
 

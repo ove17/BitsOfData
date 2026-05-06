@@ -20,7 +20,7 @@ typedef enum {
 //    BDB_COLUMN_INTEGER_MAXVAL,    // prints a string instead of the maximum value
 //    BDB_COLUMN_DECIMAL,
 //    BDB_COLUMN_CHAR,
-//    BDB_COLUMN_STRING,		// no data, points to CHAR's
+    BDB_COLUMN_STRING,		// no data, points to CHAR's
 //    BDB_COLUMN_SYMBOL_LIST,
 //    BDB_COLUMN_STRING_LIST,
 //    BDB_COLUMN_STRING_LISTS,
