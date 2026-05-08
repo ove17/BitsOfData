@@ -1,9 +1,9 @@
 // WriteColumns.c
 
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <assert.h>
-#include "BitsOfDataTypes.h"
 
 
 static char* StringBuffer = NULL;
@@ -40,18 +40,41 @@ void wc_setCursorPosition(const uint8_t position) {
 }
 
 
-// writes in reverse order
+// writes in reverse order, truncates if value does not fit in numDigits
 void wc_writeInteger(uint16_t value,
                      uint8_t numDigits,
-                     const BDB_formatT* format) {
+                     const bool leading0) {
     wc_setCursorPosition(CursorPosition + numDigits);
-    char fillChar = format->leading0 ? '0' : ' ';
-    for (uint8_t i = CursorPosition ; i > CursorPosition - numDigits; i--) {
-        uint8_t digit = (uint8_t)(value % 10);
+    char fillChar = leading0 ? '0' : ' ';
+    for (uint8_t i = CursorPosition; i > CursorPosition - numDigits; i--) {
         if (value > 0) {
+            const uint8_t digit = (uint8_t)(value % 10);
             StringBuffer[i - 1] = '0' + digit;
         } else {
             StringBuffer[i - 1] = fillChar;
+        }
+        value /= 10;
+    }
+}
+
+
+// writes in reverse order, truncates if value does not fit in numDigits
+void wc_writeDecimal(uint16_t value,
+                     const uint8_t numDigits,
+                     const uint8_t decimalShift) {
+    wc_setCursorPosition(CursorPosition + numDigits);
+    for (uint8_t i = 0; i < numDigits; i++) {
+        const uint8_t position = CursorPosition - i - 1;
+        if (decimalShift == i) {
+            StringBuffer[position] = '.';
+            continue;
+        }
+        if (value > 0) {
+            const uint8_t digit = (uint8_t)(value % 10);
+            StringBuffer[position] = '0' + digit;
+        } else {
+            char fillChar = (i > decimalShift + 1) ? ' ' : '0';
+            StringBuffer[position] = fillChar;
         }
         value /= 10;
     }

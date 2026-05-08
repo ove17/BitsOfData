@@ -15,10 +15,9 @@
 
 typedef enum {
     BDB_COLUMN_INTEGER,     // =0, so default
+//    BDB_COLUMN_INT_ZEROVAL,	// prints a string instead of 0
+    BDB_COLUMN_DECIMAL,
     BDB_COLUMN_RECORD_TYPE,	// for variable record typs
-//    BDB_COLUMN_INTEGER_ZEROVAL,	// prints a string instead of 0
-//    BDB_COLUMN_INTEGER_MAXVAL,    // prints a string instead of the maximum value
-//    BDB_COLUMN_DECIMAL,
     BDB_COLUMN_CHAR,
     BDB_COLUMN_STRING,		// no data, points to CHAR's
 //    BDB_COLUMN_SYMBOL_LIST,
@@ -26,54 +25,47 @@ typedef enum {
 //    BDB_COLUMN_STRING_LISTS,
     BDB_COLUMN_REFERENCE,	// reference to a record (, column) in another table
     BDB_COLUMN_VIRTUAL,		// no data, column in another table
-    //	BDB_NUM_COLUMN_TYPES
 } BDB_colTypeT;
 
 /*
  * General approach: custom type is preferred over extra parameters
+ * In the recordDef, columns without data MUST come AFTER the last column with data
  *
-                                      setValue
-                         getValue   changeValue	 printValue
- BDB_COLUMN_RECORD_TYPE	recordDefId		ok			n/a
- BDB_COLUMN_INTEGER			int			ok			ok
- BDB_COLUMN_INTEGER_ZEROSTR	int			ok			ok			.zeroStr
- BDB_COLUMN_INTEGER_MAXSTR	int			ok			ok			.maxStr
- BDB_COLUMN_DECIMAL			int			ok			ok			.numDecimals, .decMultiplier
- BDB_COLUMN_CHAR			int			ok			ok
- BDB_COLUMN_SYMBOL_LIST		int			ok			ok			.symbolListId
- BDB_COLUMN_STRING_LIST		int			ok			ok			.strListId
- BDB_COLUMN_STRING_LISTS	int			ok			ok			.strListIds
- BDB_COLUMN_REFERENCE	    int   	    ok        refCol
- // the following columns hold no data:
- BDB_COLUMN_VIRTUAL		 targetCol		n/a		 targetCol
- BDB_COLUMN_STRING			n/a			n/a			ok
+                                         setValue
+                             getValue   changeValue	 printValue
+ BDB_COLUMN_RECORD_TYPE     recordDefId		ok			n/a
+ BDB_COLUMN_INTEGER             int			ok			ok
+ BDB_COLUMN_INTEGER_ZEROSTR     int			ok			ok			.zeroStr
+ BDB_COLUMN_INTEGER_MAXSTR      int			ok			ok			.maxStr
+ BDB_COLUMN_DECIMAL          int*step		ok			ok
+ BDB_COLUMN_CHAR                int			ok			ok
+ BDB_COLUMN_SYMBOL_LIST         int			ok			ok			.symbolListId
+ BDB_COLUMN_STRING_LIST         int			ok			ok			.strListId
+ BDB_COLUMN_STRING_LISTS        int			ok			ok			.strListIds
+ BDB_COLUMN_REFERENCE        recordId       ok        refCol
 
- *
+ // the following columns hold no data:
+ BDB_COLUMN_VIRTUAL          targetCol		n/a		 targetCol
+ BDB_COLUMN_STRING              n/a			n/a			ok
  */
 
 
 typedef struct {
-    uint8_t leading0 : 1;
-    uint8_t leftAlign : 1;
-} BDB_formatT;
-
-
-// TODO: is BOOLEAN een apart type?
-typedef struct {
     BDB_colTypeT colType;
-    uint16_t minValue; // default = 0
+    uint16_t minValue;
     uint16_t maxValue;
     uint16_t defaultVal;
-    BDB_formatT format;
     union {
-/*
-        struct { // INTEGER_ZEROVAL:
-    // TODO: apply offset after checking for int0string (inputNumber for trainTable)
-            uint8_t int0String;	// string to display if value == 0
+        struct { // INTEGER:
+            bool leading0;
         };
         struct { // DECIMAL:
-            uint8_t decNumdecimals;	// >0
-            uint8_t decMultiplier; // >0 - enables e.g. 0.2 or 0.5 steps
+            uint8_t decimalShift;   // left-shift of decimal point: >0 && <=5
+            uint8_t decStep;        // allows steps of 1, 2 or 5
+        };
+/*
+        struct { // INTEGER_ZEROVAL:
+            uint8_t int0String;	// string to display if value == 0
         };
         struct { // SYMBOL:
             uint8_t* symbolList;	// list of custom symbols (non-ascii)
@@ -84,7 +76,8 @@ typedef struct {
         struct { // STRING_LISTS
             uint8_t* stringLists;	//  list of (list of string ids)
             uint8_t stringListColumn;	// column that determines which list is used
-        };*/
+        };
+*/
         struct { // CHAR:
             const char* charSet;
         };

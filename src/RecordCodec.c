@@ -13,7 +13,17 @@
 
 
 static uint8_t getNumBitsOfColumn(const BDB_recordT* recordDef,
-                                  const uint8_t column);
+                                  const uint8_t column) {
+    const BDB_columnT* colDef = &recordDef->columns[column];
+    uint16_t colSize = colDef->maxValue - colDef->minValue;
+    if (colDef->colType == BDB_COLUMN_DECIMAL && colDef->decStep > 1) {
+        colSize /= colDef->decStep;
+    }
+    return bu_getNumBits(colSize);
+}
+
+
+// api:
 
 
 // returns the packed size of a record in bytes
@@ -60,8 +70,13 @@ void rc_encodeRecord(const uint16_t recordData[],   // input (separate values)
 
     for (uint8_t col = 0; col < recordDef->numColumns; col++) {
         uint8_t numBits = getNumBitsOfColumn(recordDef, col);
-        uint16_t minVal = recordDef->columns[col].minValue;
-        uint32_t value = (recordData[col] - minVal) & bu_truncateMask(numBits);
+        const BDB_columnT* columnDef = &recordDef->columns[col];
+        uint16_t minVal = columnDef->minValue;
+        uint32_t value = (recordData[col] - minVal);
+        if (columnDef->colType == BDB_COLUMN_DECIMAL && columnDef->decStep > 1) {
+            value /= columnDef->decStep;
+        }
+        value &= bu_truncateMask(numBits);
 
         // add the entire value to the bitBuffer:
         bitBuffer = (bitBuffer << numBits) | value;
@@ -99,17 +114,23 @@ void rc_decodeRecord(const uint8_t rawRecord[], // input (packed)
 
     for (uint8_t col = 0; col < recordDef->numColumns; col++) {
         uint8_t numBits = getNumBitsOfColumn(recordDef, col);
+        const BDB_columnT* columnDef = &recordDef->columns[col];
 
         while (bitsInBuffer < numBits) {
             bitBuffer = (bitBuffer << 8) | rawRecord[inIndex++];
             bitsInBuffer += 8;
         }
-        if (rc_isVirtualColumn(&recordDef->columns[col])) {
+        if (rc_isVirtualColumn(columnDef)) {
             recordData[col] = 0xFFFF;   // column value must not be used
         } else {
             uint8_t shift = bitsInBuffer - numBits;
-            uint16_t minVal = recordDef->columns[col].minValue;
-            recordData[col] = (uint16_t)((bitBuffer >> shift) & bu_truncateMask(numBits)) + minVal;
+            uint16_t minValue = columnDef->minValue;
+            recordData[col] = (uint16_t)(bitBuffer >> shift);
+            recordData[col] &= bu_truncateMask(numBits);
+            if (columnDef->colType == BDB_COLUMN_DECIMAL && columnDef->decStep > 1) {
+                recordData[col] *= columnDef->decStep;
+            }
+            recordData[col] += minValue;
         }
 
         bitsInBuffer -= numBits;
@@ -120,12 +141,4 @@ void rc_decodeRecord(const uint8_t rawRecord[], // input (packed)
 
 bool rc_isVirtualColumn(const BDB_columnT* columnDef) {
     return columnDef->colType == BDB_COLUMN_VIRTUAL || columnDef->colType == BDB_COLUMN_STRING;
-}
-
-
-static uint8_t getNumBitsOfColumn(const BDB_recordT* recordDef,
-                                  const uint8_t column) {
-    BDB_columnT colDef = recordDef->columns[column];
-    uint16_t colSize = colDef.maxValue - colDef.minValue;
-    return bu_getNumBits(colSize);
 }

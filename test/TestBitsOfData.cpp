@@ -64,6 +64,19 @@ TEST(OpenDbase, getNumRecordsReturns2onNewVarRecordTableWithExtraRecord) {
 }
 
 
+TEST(OpenDbase, getNumRealColumnsReturnsNumColumnsWithoutVirtual) {
+    BDB_openDataBase(&dbaseDef);
+    BYTES_EQUAL(4, BDB_getNumRealColumns(0, 0));
+}
+
+
+TEST(OpenDbase, getNumRealColumnsReturnsNumColumnsWithoutVirtualForVariableRecordType) {
+    BDB_openDataBase(&dbaseDef);
+    BDB_setValue(1, 0, 0, 1); // set to 2nd recordType
+    BYTES_EQUAL(3, BDB_getNumRealColumns(1, 0));
+}
+
+
 TEST(OpenDbase, newTableHasrecordWithDefaultColValues) {
     BDB_openDataBase(&dbaseDef);
     LONGS_EQUAL(7, BDB_getValue(0, 0, 0));
@@ -376,7 +389,7 @@ TEST(OpenDbase, accessingARecordInAnotherTable_DoesNotStoreRecordBuffer) {
 }
 
 
-// NOTE: an actual change is not required, just an edit
+// NOTE: an actual change is not required, an edit without change suffices
 TEST(OpenDbase, changingToAnotherRecordDoesNotStoreIfValueWasNotEdited) {
     BDB_openDataBase(&dbaseDef);
     BDB_insertRecordAfter(0, 0);
@@ -393,14 +406,14 @@ TEST(OpenDbase, changingToAnotherRecordDoesNotStoreIfValueWasNotEdited) {
 // set/get records
 
 
-TEST(OpenDbase, getRecordOnSingleRecDefReturnsAllColumns) {
+TEST(OpenDbase, getRecordOnSingleRecDefReturnsAllNonVirtualColumns) {
     BDB_openDataBase(&dbaseDef);
-    uint16_t tab0rec[] = { 7, 1234, 0, 0xFFFF, 2 }; // NOTE: column 3 = not used
-    CHECK_UINT16_ARRAY_EQUAL(tab0rec, BDB_getRecord(0, 0), 5);
+    uint16_t record0[] = { 7, 1234, 0, 2 };
+    CHECK_UINT16_ARRAY_EQUAL(record0, BDB_getRecord(0, 0), 4);
 }
 
 
-TEST(OpenDbase, getRecordOnVariableRecDefReturnsAllColumns) {
+TEST(OpenDbase, getRecordOnVariableRecDefReturnsAllNonVirtualColumns) {
     BDB_openDataBase(&dbaseDef);
     BDB_insertRecordAfter(1, 0);
     CHECK_TRUE(BDB_setValue(1, 0, 0, 0)); // set recordType to 0
@@ -413,15 +426,47 @@ TEST(OpenDbase, getRecordOnVariableRecDefReturnsAllColumns) {
 }
 
 
-TEST(OpenDbase, setRecord) {
+TEST(OpenDbase, setRecordToValidRecordSucceeds) {
     BDB_openDataBase(&dbaseDef);
     BDB_insertRecordAfter(1, 0);
-    uint16_t rec1_0[] = { 0, 123, 75, 500};
-    BDB_setRecord(1, 0, rec1_0);
+    uint16_t rec1_0[] = { 0, 123, 75, 60, 500};
+    CHECK_TRUE(BDB_setRecord(1, 0, rec1_0));
     uint16_t rec1_1[] = { 1, 85, 0, };
-    BDB_setRecord(1, 1, rec1_1);
+    CHECK_TRUE(BDB_setRecord(1, 1, rec1_1));
     CHECK_UINT16_ARRAY_EQUAL(rec1_0, BDB_getRecord(1, 0), 4);
     CHECK_UINT16_ARRAY_EQUAL(rec1_1, BDB_getRecord(1, 1), 3);
+}
+
+
+TEST(OpenDbase, setRecordToRecordWithValueGtMaxValueFails) {
+    BDB_openDataBase(&dbaseDef);
+    uint16_t record0[] = { 5, 4001, 0, 2 };
+    CHECK_FALSE(BDB_setRecord(0, 0, record0));
+    LONGS_EQUAL(1234, BDB_getValue(0, 0, 1)); // unchanged
+}
+
+
+TEST(OpenDbase, setRecordToRecordWithValueLtMinValueFails) {
+    BDB_openDataBase(&dbaseDef);
+    uint16_t record0[] = { 0, 1000, 0, 2 };
+    CHECK_FALSE(BDB_setRecord(0, 0, record0));
+    LONGS_EQUAL(7, BDB_getValue(0, 0, 0)); // unchanged
+}
+
+
+TEST(OpenDbase, setRecordToRecordWithDecimalWithInvalidStepFails) {
+    BDB_openDataBase(&dbaseDef);
+    uint16_t record1[] = { 0, 123, 12, 512, 899};
+    CHECK_FALSE(BDB_setRecord(1, 0, record1));
+    LONGS_EQUAL(10, BDB_getValue(1, 0, 4)); // unchanged
+}
+
+
+TEST(OpenDbase, setRecordToRecordWithInvalidReferenceFails) {
+    BDB_openDataBase(&dbaseDef);
+    uint16_t record0[] = { 4, 123, 8, 3 };
+    CHECK_FALSE(BDB_setRecord(0, 0, record0));
+    LONGS_EQUAL(0, BDB_getValue(1, 0, 2)); // unchanged
 }
 
 
@@ -627,22 +672,14 @@ TEST(OpenDbase, setValueFailsOnAVirtualColumn) {
 
 TEST(OpenDbase, changeValueFailsOnAVirtualColumn) {
     BDB_openDataBase(&dbaseDef);
-    CHECK_FALSE(BDB_changeValue(0, 0, 3, 1));
+    CHECK_FALSE(BDB_changeValue(0, 0, 4, 1));
 }
 
 
 TEST(OpenDbase, getValueOnAVirtualColumn_ReturnsValueOfTheReferencedTableColumn) {
     BDB_openDataBase(&dbaseDef);
     BDB_setValue(2, 0, 1, 8);
-    BYTES_EQUAL(8, BDB_getValue(0, 0, 3));
-}
-
-
-TEST(OpenDbase, anIntegerColumnAfterAVirtualColumnCanBeSetAndGet) {
-    BDB_openDataBase(&dbaseDef);
-    BYTES_EQUAL(2, BDB_getValue(0, 0, 4));
-    BDB_setValue(0, 0, 4, 3);
-    BYTES_EQUAL(3, BDB_getValue(0, 0, 4));
+    BYTES_EQUAL(8, BDB_getValue(0, 0, 4));
 }
 
 
@@ -693,30 +730,62 @@ TEST(OpenDbase, writeValueOnAStringColumnWritesAllChars) {
 
 
 // BDB_COLUMN_DECIMAL
-// assert decNumDecimals > 0, < 5
-// assert decStep == 1, 2, 5
-// writeValue10_OnDecimalColumnWith1DecimalInsertsPointBeforeLastDigit
-// writeValue25_OnDecimalColumnWith3DecimalsInsertsZeroPointZeroBeforeDigits
-// setValue to non-step? validate?
-// changeValue with step? validate?
-// writeValueWithStep HOW? multiplier/divider? manipulate min/max/default value?
-
-// SOLUTION: translation is done by encode/decode
-    // range checking in encode -> return false if validation failure
 
 
-// BDB_COLUMN_ZEROVAL
+TEST(OpenDbase, setValueToNonStepValueFails) {
+    BDB_openDataBase(&dbaseDef);
+    CHECK_FALSE(BDB_setValue(1, 0, 4, 238));
+}
 
+
+TEST(OpenDbase, setValueToStepValueSucceeds) {
+    BDB_openDataBase(&dbaseDef);
+    CHECK_TRUE(BDB_setValue(1, 0, 4, 25));
+}
+
+
+TEST(OpenDbase, changeValueBy1IncreasesValueByStep) {
+    BDB_openDataBase(&dbaseDef);
+    CHECK_TRUE(BDB_changeValue(1, 0, 4, 1));
+    LONGS_EQUAL(15, BDB_getValue(1, 0, 4));
+}
+
+
+TEST(OpenDbase, writeValue10_OnDecimalColumnWith1DecimalInsertsPointBeforeLastDigit) {
+    BDB_openDataBase(&dbaseDef);
+    BDB_writeValue(1, 0, 4, 0);
+    STRNCMP_EQUAL(" 1.0", BDB_getWriteBuffer(), 4);
+}
+
+
+TEST(OpenDbase, writeValue0_OnDecimalColumnWith4DecimalsInserts0pt000) {
+    BDB_openDataBase(&dbaseDef);
+    BDB_writeValue(1, 0, 2, 0);
+    STRNCMP_EQUAL("0.0000\n", BDB_getWriteBuffer(), 6);
+}
+
+
+TEST(OpenDbase, writeValue19_OnDecimalColumnWith4DecimalsInserts0tp00) {
+    BDB_openDataBase(&dbaseDef);
+    BDB_setValue(1, 0, 2, 19);
+    BDB_writeValue(1, 0, 2, 0);
+    STRNCMP_EQUAL("0.0019\n", BDB_getWriteBuffer(), 6);
+}
 
 
 /* TODO:
  *
- * range checking when encoding values (setRecord)
+ * remaining columnTypes:
+ *  BDB_COLUMN_INT_ZEROVAL
+ *  BDB_COLUMN_STRING_LIST
+ *  BDB_COLUMN_SYMBOL_LIST
+ *  BDB_COLUMN_STRING_LISTS
  *
+ * remaining writeColumnValue implementations for columnTypes
  *
- * 9 sPrintRecord
- *   writeColumnValue -> start pos - end pos
- * 10 all recordDefs
+ * writeRecord
  *
+ * writeColumnValue -> start pos - end pos
  *
+ * refactor: move API to bottom and all static functions to top
  */

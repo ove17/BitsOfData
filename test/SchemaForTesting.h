@@ -27,8 +27,8 @@ static const BDB_recordT recordDef = {
         {.maxValue = 8, .defaultVal = 7, .minValue = 3},
         {.maxValue = 4000, .defaultVal = 1234,},
         {.colType = BDB_COLUMN_REFERENCE, .refTable = 2, .maxValue = maxNumRecordsInTable2 - 1,},
-        {.colType = BDB_COLUMN_VIRTUAL, .virtRecordCol = 2, .virtValueCol = 1},
         {.maxValue = 3, .defaultVal = 2, .minValue = 2},
+        {.colType = BDB_COLUMN_VIRTUAL, .virtRecordCol = 2, .virtValueCol = 1},
     },
 };
 static const BDB_recordT recordDefs0[] = {recordDef};
@@ -53,12 +53,13 @@ static const BDB_columnT recordTypeColumn = {
 };
 
 static const BDB_recordT recordDef0 = {
-    .numColumns = 4,
+    .numColumns = 5,
     .columns = {
         recordTypeColumn,
         {.maxValue = 300, .defaultVal = 150},
-        {.maxValue = 100 },
+        {.colType = BDB_COLUMN_DECIMAL, .maxValue = 100, .decimalShift = 4, .decStep = 1},
         {.maxValue = 1024, .defaultVal = 255},
+        {.colType = BDB_COLUMN_DECIMAL, .minValue = 5, .maxValue = 995, .defaultVal = 10, .decimalShift = 1, .decStep = 5},
     },
 };
 static const BDB_recordT recordDef1 = {
@@ -67,6 +68,7 @@ static const BDB_recordT recordDef1 = {
         recordTypeColumn,
         {.maxValue = 85, .defaultVal = 45, .minValue = 5},
         {.colType = BDB_COLUMN_REFERENCE, .refTable = 2, .maxValue = maxNumRecordsInTable2 - 1,},
+        {.colType = BDB_COLUMN_VIRTUAL, .virtRecordCol = 2, .virtValueCol = 1},
     },
 };
 static const BDB_recordT recordDefs1[] = {recordDef0, recordDef1};
@@ -81,7 +83,7 @@ static const BDB_tableT table1 = {
 static const BDB_recordT recordDef2 = {
     .numColumns = 6,
     .columns = {
-        {.maxValue = 255, .format = {.leading0 = true},},
+        {.colType = BDB_COLUMN_INTEGER, .maxValue = 255, .leading0 = true,},
         {.colType = BDB_COLUMN_CHAR, .maxValue = CHARSET_MAX, .charSet = charSet},
         {.colType = BDB_COLUMN_CHAR, .maxValue = CHARSET_MAX, .charSet = charSet},
         {.colType = BDB_COLUMN_CHAR, .maxValue = CHARSET_MAX, .charSet = charSet},

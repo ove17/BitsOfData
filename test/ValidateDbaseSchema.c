@@ -5,41 +5,72 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <stdio.h>
 #include "BitsOfDataTypes.h"
 
 
-static void assertColumnIntegerIsValid(const BDB_columnT* columnDef) {
+#define ASSERT_VALID(cond) \
+do { \
+    if (!(cond)) { \
+        printf("\nINVALID SCHEMA @ TableId=%i RedDefId=%i Col=%i\n\n", TableId, RecDefId, Col);\
+        assert(cond); \
+    } \
+} while (0)
+
+
+static uint8_t TableId = 0;
+static uint8_t RecDefId = 0;
+static uint8_t Col = 0;
+
+
+static void assertIntegerColumnIsValid(const BDB_columnT* columnDef) {
+    assert(columnDef->maxValue > columnDef->minValue);
     assert(columnDef->defaultVal >= columnDef->minValue);
     assert(columnDef->defaultVal <= columnDef->maxValue);
 }
 
 
-static void assertColumnRecordTypeIsValid(const BDB_tableT* tableDef,
+static void assertDecimalColumnIsValid(const BDB_columnT* columnDef) {
+    assert(columnDef->maxValue > columnDef->minValue);
+    assert(columnDef->defaultVal >= columnDef->minValue);
+    assert(columnDef->defaultVal <= columnDef->maxValue);
+    assert(columnDef->decimalShift > 0);
+    assert(columnDef->decimalShift <= 5); // arbitrary? or practical?
+    const uint8_t step = columnDef->decStep;
+    assert(step == 1 || step == 2 || step == 5); // NOTE: step == 0 would cause div/0
+    // step must not cause remainder:
+    assert((columnDef->maxValue - columnDef->minValue) % step == 0);
+}
+
+
+static void assertRecordTypeColumnIsValid(const BDB_tableT* tableDef,
                                           const BDB_columnT* columnDef,
                                           const uint8_t columnId) {
     assert(columnDef->minValue == 0);
     assert(columnDef->defaultVal == 0);
+    assert(columnDef->maxValue > 0);
     assert(columnId == 0);
-    assert(columnDef->colType == BDB_COLUMN_RECORD_TYPE);
     const uint8_t numRecDefs = tableDef->numRecordDefs;
     assert(columnDef->maxValue == numRecDefs - 1);
     assert(numRecDefs > 1);
 }
 
 
-static void assertColumnCharIsValid(const BDB_columnT* columnDef) {
+static void assertCharColumnIsValid(const BDB_columnT* columnDef) {
     const uint8_t maxCharIndex = (uint8_t)columnDef->maxValue;
     assert(columnDef->charSet[maxCharIndex+1] == '\0');
     assert(columnDef->minValue == 0);
     assert(columnDef->defaultVal == 0);
+    assert(columnDef->maxValue > 0);
 }
 
 
-static void assertColumnReferenceIsValid(const BDB_dbaseDefT* dbaseDef,
+static void assertReferenceColumnIsValid(const BDB_dbaseDefT* dbaseDef,
                                          const BDB_recordT* recordDef,
                                          const BDB_columnT* columnDef) {
     assert(columnDef->minValue == 0);
     assert(columnDef->defaultVal == 0);
+    assert(columnDef->maxValue > 0);
     const uint8_t refTableId = columnDef->refTable;
     const uint8_t maxNumRecords = dbaseDef->tables[refTableId].maxNumRecords;
     const uint8_t numColumns = recordDef->numColumns;
@@ -52,12 +83,12 @@ static void assertColumnReferenceIsValid(const BDB_dbaseDefT* dbaseDef,
 }
 
 
-static void assertColumnVirtualIsValid(const BDB_dbaseDefT* dbaseDef,
+static void assertVirtualColumnIsValid(const BDB_dbaseDefT* dbaseDef,
                                        const BDB_recordT* recordDef,
                                        const BDB_columnT* columnDef) {
     assert(columnDef->minValue == 0);
-    assert(columnDef->maxValue == 0);
     assert(columnDef->defaultVal == 0);
+    assert(columnDef->maxValue == 0);
     const uint8_t virtualRecordCol = columnDef->virtRecordCol;
     const BDB_columnT* refColDef = &recordDef->columns[virtualRecordCol];
     const BDB_colTypeT refColType = refColDef->colType;
@@ -73,11 +104,11 @@ static void assertColumnVirtualIsValid(const BDB_dbaseDefT* dbaseDef,
 }
 
 
-static void assertColumnStringIsValid(const BDB_recordT* recordDef,
+static void assertStringColumnIsValid(const BDB_recordT* recordDef,
                                       const BDB_columnT* columnDef) {
     assert(columnDef->minValue == 0);
-    assert(columnDef->maxValue == 0);
     assert(columnDef->defaultVal == 0);
+    assert(columnDef->maxValue == 0);
     const uint8_t firstCol = columnDef->strFirstChar;
     const uint8_t lastCol = firstCol + columnDef->strLength;
     for (uint8_t col = firstCol; col < lastCol; col++) {
@@ -89,34 +120,46 @@ static void assertColumnStringIsValid(const BDB_recordT* recordDef,
 
 void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef) {
     const uint8_t numTables = dbaseDef->numTables;
-    for (uint8_t tableId = 0; tableId < numTables; tableId++) {
-        const BDB_tableT* tableDef = &dbaseDef->tables[tableId];
+    for (TableId = 0; TableId < numTables; TableId++) {
+        const BDB_tableT* tableDef = &dbaseDef->tables[TableId];
         const uint8_t numRecDefs = tableDef->numRecordDefs;
-        for (uint8_t recDefId = 0; recDefId < numRecDefs; recDefId++) {
-            const BDB_recordT* recordDef = &tableDef->recordDefs[recDefId];
+        for (RecDefId = 0; RecDefId < numRecDefs; RecDefId++) {
+            const BDB_recordT* recordDef = &tableDef->recordDefs[RecDefId];
             const uint8_t numColumns = recordDef->numColumns;
-            for (uint8_t col = 0; col < numColumns; col++) {
-                const BDB_columnT* columnDef = &recordDef->columns[col];
+            bool virtualColumnPresent = false;
+            for (Col = 0; Col < numColumns; Col++) {
+                const BDB_columnT* columnDef = &recordDef->columns[Col];
                 switch(columnDef->colType) {
                     case BDB_COLUMN_INTEGER :
-                        assertColumnIntegerIsValid(columnDef);
+                        assertIntegerColumnIsValid(columnDef);
+                        ASSERT_VALID(!virtualColumnPresent);
+                        break;
+                    case BDB_COLUMN_DECIMAL :
+                        assertDecimalColumnIsValid(columnDef);
+                        ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_RECORD_TYPE :
-                        assertColumnRecordTypeIsValid(tableDef, columnDef, col);
+                        assertRecordTypeColumnIsValid(tableDef, columnDef, Col);
+                        ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_REFERENCE :
-                        assertColumnReferenceIsValid(dbaseDef, recordDef, columnDef);
+                        assertReferenceColumnIsValid(dbaseDef, recordDef, columnDef);
+                        ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_VIRTUAL :
-                        assertColumnVirtualIsValid(dbaseDef, recordDef, columnDef);
+                        assertVirtualColumnIsValid(dbaseDef, recordDef, columnDef);
+                        virtualColumnPresent = true;
                         break;
                     case BDB_COLUMN_CHAR :
-                        assertColumnCharIsValid(columnDef);
+                        assertCharColumnIsValid(columnDef);
+                        ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_STRING :
-                        assertColumnStringIsValid(recordDef, columnDef);
+                        assertStringColumnIsValid(recordDef, columnDef);
+                        virtualColumnPresent = true;
                         break;
                     default :
+                        assert(0 && "Invalid columnType");
                         break;
                 }
             }

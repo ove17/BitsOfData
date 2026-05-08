@@ -3,6 +3,7 @@
  */
 
 #include "CppUTest/TestHarness.h"
+#include "cpputestUtils.h"
 
 extern "C" {
     #include "BitsOfDataTypes.h"
@@ -88,6 +89,18 @@ TEST(RecordCodec, getRecordSizeOn4plus5bitsReturns2) {
 }
 
 
+TEST(RecordCodec, getRecordSizeOnDecimalRecordWithStepIsReduced) {
+    static const BDB_recordT recordDef = {
+        .numColumns = 1,
+        .columns = {
+            {.colType = BDB_COLUMN_DECIMAL, .minValue = 5, .maxValue = 1280, .decStep = 5},
+        },
+    };
+    // expected: (1280 - 5)/5 = 255, so 1 byte
+    BYTES_EQUAL(1, rc_getRecordSize(&recordDef));
+}
+
+
 TEST(RecordCodec, encodeRecordReturnsValueOnRecordWith8bitColumn) {
     uint8_t value = 100;
     const uint16_t recordData[1] = {value,};
@@ -157,7 +170,7 @@ TEST(RecordCodec, encodingMultipleColumnsThenDecodingReturnsSameColumnValues) {
     rawRecord[6] &= 0b11110000; // wipe excess bits
     uint16_t recordDataOut[6] = { 0 };
     rc_decodeRecord(rawRecord, recordDataOut, &tableDef);
-    MEMCMP_EQUAL(recordData, recordDataOut, 2*6);
+    CHECK_UINT16_ARRAY_EQUAL(recordData, recordDataOut, 6);
 }
 
 
@@ -204,7 +217,6 @@ TEST(RecordCodec, encodingVariableRecordThenDecodingReturnsSame) {
 }
 
 
-
 TEST(RecordCodec, encodeRecordSkipsVirtualColumn) {
     uint8_t value1 = 0b01010101; // 0x55
     uint8_t value2 = 0b10101010; // 0xAA
@@ -233,5 +245,31 @@ TEST(RecordCodec, encodeRecordSkipsVirtualColumn) {
 
     uint16_t recordDataOut[3] = { 0 };
     rc_decodeRecord(rawRecord, recordDataOut, &tableDef);
-    MEMCMP_EQUAL(recordData, recordDataOut, 3);
+    CHECK_UINT16_ARRAY_EQUAL(recordData, recordDataOut, 3);
 }
+
+
+TEST(RecordCodec, encodingDecimalColumnsThenDecodingReturnsSameValue) {
+    const uint16_t recordData[] = {995, 170};
+    uint8_t rawRecord[3] = { 0 };
+    static const BDB_recordT recordDef = {
+        .numColumns = 2,
+        .columns = {
+            {.colType = BDB_COLUMN_DECIMAL, .minValue = 5, .maxValue = 1280, .decStep = 5},
+            {.maxValue = 255},
+        },
+    };
+    static const BDB_recordT recordDefs[] = {recordDef};
+    BDB_tableT tableDef = {
+        .numRecordDefs = 1,
+        .recordDefs = recordDefs,
+    };
+    rc_encodeRecord(recordData, rawRecord, &tableDef);
+    rawRecord[2] = 0; // wipe excess bits to make sure record fits in 2 bytes
+    uint16_t recordDataOut[2] = { 0 };
+    rc_decodeRecord(rawRecord, recordDataOut, &tableDef);
+    CHECK_UINT16_ARRAY_EQUAL(recordData, recordDataOut, 2);
+}
+
+
+

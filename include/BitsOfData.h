@@ -58,9 +58,12 @@ uint8_t BDB_writeValue(const uint8_t tableId,
 
 uint16_t* BDB_getRecord(const uint8_t tableId,
 						const uint8_t recordId);
-void BDB_setRecord(const uint8_t tableId,
+bool BDB_setRecord(const uint8_t tableId,
 				   const uint8_t recordId,
 				   const uint16_t* data);
+
+uint8_t BDB_getNumRealColumns(const uint8_t tableId,
+							  const uint8_t recordId);
 
 uint8_t BDB_getNumRecords(const uint8_t tableId);
 
