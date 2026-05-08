@@ -4,8 +4,8 @@
  * Contains public types for defining a database.
  */
 
-#ifndef __bits_of_data_types_h__
-#define __bits_of_data_types_h__
+#ifndef BITS_OF_DATA_TYPES_H
+#define BITS_OF_DATA_TYPES_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -19,7 +19,7 @@ typedef enum {
 //    BDB_COLUMN_INTEGER_ZEROVAL,	// prints a string instead of 0
 //    BDB_COLUMN_INTEGER_MAXVAL,    // prints a string instead of the maximum value
 //    BDB_COLUMN_DECIMAL,
-//    BDB_COLUMN_CHAR,
+    BDB_COLUMN_CHAR,
     BDB_COLUMN_STRING,		// no data, points to CHAR's
 //    BDB_COLUMN_SYMBOL_LIST,
 //    BDB_COLUMN_STRING_LIST,
@@ -35,21 +35,27 @@ typedef enum {
                                       setValue
                          getValue   changeValue	 printValue
  BDB_COLUMN_RECORD_TYPE	recordDefId		ok			n/a
- BDB_COLUMN_INTEGER			int			ok			ok			.leading0
+ BDB_COLUMN_INTEGER			int			ok			ok
  BDB_COLUMN_INTEGER_ZEROSTR	int			ok			ok			.zeroStr
  BDB_COLUMN_INTEGER_MAXSTR	int			ok			ok			.maxStr
  BDB_COLUMN_DECIMAL			int			ok			ok			.numDecimals, .decMultiplier
- BDB_COLUMN_CHAR			int			ok			ok			.charSet
+ BDB_COLUMN_CHAR			int			ok			ok
  BDB_COLUMN_SYMBOL_LIST		int			ok			ok			.symbolListId
  BDB_COLUMN_STRING_LIST		int			ok			ok			.strListId
  BDB_COLUMN_STRING_LISTS	int			ok			ok			.strListIds
- BDB_COLUMN_REFERENCE	    int   	    ok		   refCol       value = recordId in .refTable
+ BDB_COLUMN_REFERENCE	    int   	    ok        refCol
  // the following columns hold no data:
  BDB_COLUMN_VIRTUAL		 targetCol		n/a		 targetCol
- BDB_COLUMN_STRING			n/a			n/a			ok			.strFirstChar, .strLength
+ BDB_COLUMN_STRING			n/a			n/a			ok
 
  *
  */
+
+
+typedef struct {
+    uint8_t leading0 : 1;
+    uint8_t leftAlign : 1;
+} BDB_formatT;
 
 
 // TODO: is BOOLEAN een apart type?
@@ -58,31 +64,16 @@ typedef struct {
     uint16_t minValue; // default = 0
     uint16_t maxValue;
     uint16_t defaultVal;
-/*TODO: either the following, OR separate colType structs for each columnType ?
-        OR: only colType and externally manage its properties (does not feel good...)
-        SHOULD sprintRecord/value live in a separate module?
-                PROBABLY!
-                SEPARATE formatting (leading0, decMultiplier, stringList) from dbase
-                    logic (refTable, virtualValueColumn)
-*/
+    BDB_formatT format;
     union {
-        struct { 	 // INTEGER:
-            bool    intLeading0;
-        };
-/*        struct { // INTEGER_ZEROVAL:
+/*
+        struct { // INTEGER_ZEROVAL:
     // TODO: apply offset after checking for int0string (inputNumber for trainTable)
             uint8_t int0String;	// string to display if value == 0
         };
         struct { // DECIMAL:
             uint8_t decNumdecimals;	// >0
             uint8_t decMultiplier; // >0 - enables e.g. 0.2 or 0.5 steps
-        };
-        struct { // CHAR:
-            uint8_t* charSet;		// there may be more than 1 (?)
-        };
-        struct { // STRING: virtual column, NO DATA!
-            uint8_t strFirstChar;   // index of a CHAR column in the same table
-            uint8_t strLength;		// number of CHARs (immediately following the 1st)
         };
         struct { // SYMBOL:
             uint8_t* symbolList;	// list of custom symbols (non-ascii)
@@ -94,6 +85,13 @@ typedef struct {
             uint8_t* stringLists;	//  list of (list of string ids)
             uint8_t stringListColumn;	// column that determines which list is used
         };*/
+        struct { // CHAR:
+            const char* charSet;
+        };
+        struct { // STRING: virtual column, NO DATA!
+            uint8_t strFirstChar;   // index of a CHAR column in the same table
+            uint8_t strLength;		// number of CHARs (immediately following the 1st)
+        };
         struct { // REFERENCE: data value = recordId in other table
             uint8_t refTable;
             uint8_t refColumn; // in the reference table, generally a string column
@@ -136,6 +134,7 @@ typedef struct {
 typedef struct {
     uint8_t numTables;
     const BDB_tableT* tables;
+    uint8_t maxStringBufferSize;      // for writeColumns functions
 } BDB_dbaseDefT;
 
 

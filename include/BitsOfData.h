@@ -21,8 +21,8 @@
  * 			set, get and change only work with int's
  */
 
-#ifndef __bits_of_data_h__
-#define __bits_of_data_h__
+#ifndef BITS_OF_DATA_H
+#define BITS_OF_DATA_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -46,11 +46,13 @@ bool BDB_changeValue(const uint8_t tableId,
 void BDB_storeRecord(const uint8_t tableId,
 					 const uint8_t recordId);
 
+char* BDB_getWriteBuffer(void);
+uint8_t BDB_writeValue(const uint8_t tableId,
+					   const uint8_t recordId,
+					   const uint8_t columnId,
+					   const uint8_t startPosition);
 /*
-char* BDB_sPrintValue(const uint8_t tableId, // TODO: is this fn necessary?
-					  const uint8_t recordId,
-					  const uint8_t columnId);
-char* BDB_sPrintRecord(const uint8_t tableId,
+ * char* BDB_sPrintRecord(const uint8_t tableId,
 					   const uint8_t recordId);
 */
 

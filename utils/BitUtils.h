@@ -2,8 +2,8 @@
  * BitUtils.h
  */
 
-#ifndef __bit_utils_h__
-#define __bit_utils_h__
+#ifndef BIT_UTILS_H
+#define BIT_UTILS_H
 
 
 #include <stdint.h>

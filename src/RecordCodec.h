@@ -6,8 +6,8 @@
  *
  */
 
-#ifndef __record_codec_h__
-#define __record_codec_h__
+#ifndef RECORD_CODEC_H
+#define RECORD_CODEC_H
 
 #include <stdint.h>
 #include <stdbool.h>

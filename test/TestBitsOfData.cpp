@@ -18,6 +18,7 @@ extern "C" {
     #include "EeHwX86.h"
     #include "BitsOfData.h"
     #include "RecordStore.h"
+    #include "SchemaForTesting.h"
 }
 
 
@@ -29,86 +30,6 @@ TEST_GROUP(OpenDbase) {
     void teardown() {
         BDB_closeDataBase();
     }
-};
-
-static const uint8_t maxNumRecordsInTable2 = 15;
-
-static const BDB_recordT recordDef = {
-    .numColumns = 5,
-    .columns = {
-        {.maxValue = 8, .defaultVal = 7, .minValue = 3},
-        {.maxValue = 4000, .defaultVal = 1234},
-        {.colType = BDB_COLUMN_REFERENCE, .refTable = 2, .maxValue = maxNumRecordsInTable2 - 1,},
-        {.colType = BDB_COLUMN_VIRTUAL, .virtRecordCol = 2, .virtValueCol = 1},
-        {.maxValue = 3, .defaultVal = 2, .minValue = 2},
-    },
-};
-static const BDB_recordT recordDefs0[] = {recordDef};
-static const BDB_tableT table0 = {
-    .maxNumRecords = 10,
-    .numRecordDefs = 1,
-    .recordDefs = recordDefs0
-};
-
-enum {
-    RECORD_TYPE_0,
-    RECORD_TYPE_1,
-    NUM_RECORD_TYPES
-};
-
-
-static const BDB_columnT recordTypeColumn = {
-    .colType = BDB_COLUMN_RECORD_TYPE,
-    .minValue = 0,
-    .maxValue = NUM_RECORD_TYPES - 1,
-    .defaultVal = 0
-};
-
-static const BDB_recordT recordDef0 = {
-    .numColumns = 4,
-    .columns = {
-        recordTypeColumn,
-        {.maxValue = 300, .defaultVal = 150},
-        {.maxValue = 100 },
-        {.maxValue = 1024, .defaultVal = 255},
-    },
-};
-static const BDB_recordT recordDef1 = {
-    .numColumns = 3,
-    .columns = {
-        recordTypeColumn,
-        {.maxValue = 85, .defaultVal = 45, .minValue = 5},
-        {.colType = BDB_COLUMN_REFERENCE, .refTable = 2, .maxValue = maxNumRecordsInTable2 - 1,},
-    },
-};
-static const BDB_recordT recordDefs1[] = {recordDef0, recordDef1};
-
-static const BDB_tableT table1 = {
-    .maxNumRecords = 20,
-    .numRecordDefs = NUM_RECORD_TYPES,
-    .recordDefs = recordDefs1
-};
-
-
-static const BDB_recordT recordDef2 = {
-    .numColumns = 2,
-    .columns = {
-        {.maxValue = 255,},
-        {.maxValue = 15,},
-    },
-};
-static const BDB_recordT recordDefs2[] = {recordDef2};
-static const BDB_tableT table2 = {
-    .maxNumRecords = maxNumRecordsInTable2,
-    .numRecordDefs = 1,
-    .recordDefs = recordDefs2
-};
-
-
-static const BDB_tableT tables[] = { table0, table1, table2};
-static const BDB_dbaseDefT dbaseDef = {
-    .numTables = 3,
-    .tables = tables
 };
 
 
@@ -606,6 +527,33 @@ TEST(OpenDbase, canRecordBeDeteted_ReturnsFalseIf_ItIsReferencedFromAVariableRec
 }
 
 
+// BDB_COLUMN_INTEGER
+
+
+TEST(OpenDbase, stringValueOf4DigitIntReturnsStringOfLength4) {
+    BDB_openDataBase(&dbaseDef);
+    BYTES_EQUAL(4, BDB_writeValue(0, 0, 1, 0));
+    MEMCMP_EQUAL("1234", BDB_getWriteBuffer(), 4);
+}
+
+
+// where maxDigits == numDigits of .maxValue
+TEST(OpenDbase, stringValueOf1DigitIntReturnsStringOfMaxLength) {
+    BDB_openDataBase(&dbaseDef);
+    BDB_setValue(0, 0, 1, 9);
+    BYTES_EQUAL(4, BDB_writeValue(0, 0, 1, 0));
+    MEMCMP_EQUAL("   9", BDB_getWriteBuffer(), 4);
+}
+
+
+TEST(OpenDbase, stringValueOfIntWithLeading0ReturnsStringWithLeading0s) {
+    BDB_openDataBase(&dbaseDef);
+    BDB_setValue(2, 0, 0, 14);
+    BYTES_EQUAL(3, BDB_writeValue(2, 0, 0, 0));
+    MEMCMP_EQUAL("014", BDB_getWriteBuffer(), 3);
+}
+
+
 // BDB_COLUMN_REFERENCE
 
 
@@ -690,7 +638,7 @@ TEST(OpenDbase, getValueOnAVirtualColumn_ReturnsValueOfTheReferencedTableColumn)
 }
 
 
-TEST(OpenDbase, anIntegerColumnAfterAVirtualColumnWorksCanBeSetAndGet) {
+TEST(OpenDbase, anIntegerColumnAfterAVirtualColumnCanBeSetAndGet) {
     BDB_openDataBase(&dbaseDef);
     BYTES_EQUAL(2, BDB_getValue(0, 0, 4));
     BDB_setValue(0, 0, 4, 3);
@@ -698,43 +646,76 @@ TEST(OpenDbase, anIntegerColumnAfterAVirtualColumnWorksCanBeSetAndGet) {
 }
 
 
-TEST(OpenDbase, getValueOnAVirtualColumnThatRepresentsAStringFails) {
+// BDB_COLUMN_CHAR
+
+
+TEST(OpenDbase, getValueOnCharReturnsNumericValue) {
     BDB_openDataBase(&dbaseDef);
-    BYTES_EQUAL(2, BDB_getValue(0, 0, 4));
-    BDB_setValue(0, 0, 4, 3);
-    BYTES_EQUAL(3, BDB_getValue(0, 0, 4));
+    BDB_setValue(2, 0, 1, 12);
+    BYTES_EQUAL(12, BDB_getValue(2, 0, 1));
 }
 
 
-// CHARS
+TEST(OpenDbase, writeValueSetsCharFromCharset) {
+    BDB_openDataBase(&dbaseDef);
+    BDB_setValue(2, 0, 1, 12);
+    BYTES_EQUAL(1, BDB_writeValue(2, 0, 1, 0));
+    BYTES_EQUAL(charSet[12], BDB_getWriteBuffer()[0]);
+}
+
+
+// BDB_COLUMN_STRING
+
+
+TEST(OpenDbase, setValueOnStringColumnFails) {
+    BDB_openDataBase(&dbaseDef);
+    CHECK_FALSE(BDB_setValue(2, 0, 5, 0));
+}
+
+
+TEST(OpenDbase, changeValueOnStringColumnFails) {
+    BDB_openDataBase(&dbaseDef);
+    CHECK_FALSE(BDB_changeValue(2, 0, 5, 1));
+}
+
+
+TEST(OpenDbase, getValueOnStringColumnFails) {
+    BDB_openDataBase(&dbaseDef);
+    LONGS_EQUAL(0xFFFF, BDB_getValue(2, 0, 5));
+}
+
+
+TEST(OpenDbase, writeValueOnAStringColumnWritesAllChars) {
+    BDB_openDataBase(&dbaseDef);
+    BDB_writeValue(2, 0, 5, 0);
+    STRNCMP_EQUAL("    ", BDB_getWriteBuffer() , 4);
+}
+
+
+// BDB_COLUMN_DECIMAL
+// assert decNumDecimals > 0, < 5
+// assert decStep == 1, 2, 5
+// writeValue10_OnDecimalColumnWith1DecimalInsertsPointBeforeLastDigit
+// writeValue25_OnDecimalColumnWith3DecimalsInsertsZeroPointZeroBeforeDigits
+// setValue to non-step? validate?
+// changeValue with step? validate?
+// writeValueWithStep HOW? multiplier/divider? manipulate min/max/default value?
+
+// SOLUTION: translation is done by encode/decode
+    // range checking in encode -> return false if validation failure
+
+
+// BDB_COLUMN_ZEROVAL
 
 
 
 /* TODO:
  *
- * stringValueOfIntReturnsStringWithMaxDigits // == numDigits of .maxValue
- * stringValueOfIntWithLeading0ReturnsStringWithLeading0s
- * stringValueOfIntWithoutLeading0ReturnsStringWithLeadingSpaces
+ * range checking when encoding values (setRecord)
  *
  *
- * useCharSet(charSet, sizeof(charSet))
- *      assert(sizeof == .maxValue-2
- *
- * assertDBdef:
- *      assert minValue=0
- *      assert default=0
- *
- * getValueOnCharReturnsNumericValue
- * setValueOnCharSetsNumericValue
- * changeValueOnCharReturnsFalseWhenAtMax
- * changeValueOnCharTruncatesWhenItWouldExceedMax
- * stringValueOfCharReturnsChar
- *
- * 6 charColumn
- * 6 stringColumn
- *
- * 8 (sPrintValue)
  * 9 sPrintRecord
+ *   writeColumnValue -> start pos - end pos
  * 10 all recordDefs
  *
  *

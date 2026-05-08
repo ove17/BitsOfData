@@ -40,8 +40,8 @@
  *
  */
 
-#ifndef __record_store_h__
-#define __record_store_h__
+#ifndef RECORD_STORE_H
+#define RECORD_STORE_H
 
 #include <stdint.h>
 #include <stdbool.h>

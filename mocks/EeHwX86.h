@@ -2,8 +2,8 @@
  * Low-level hardware-dependent functions to read and write EEPROM
  */
 
-#ifndef __ee_hw_x86_h__
-#define __ee_hw_x86_h__
+#ifndef EE_HW_X86_H
+#define EE_HW_X86_H
 
 #include <stdint.h>
 

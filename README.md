@@ -12,27 +12,28 @@ The focus is on small memory footprint and low-level control rather than ease-of
 
 ## Architecture
 This project provides a simple API to access a basic database with a fixed schema. 
-Every table may consist of one or more records. Records can be inserted and deleted, up to a pre-defined maximum. The record definition (i.e. its columns) can be fixed for one table, but can also be variable. In that case the first column holds the record type.
-Every record may consist of one or more columns. Every column has a column type and a number of properties.
+Every table may consist of one or more records. Records can be inserted and deleted, up to a pre-defined maximum. The record definition (i.e. its columns) can be fixed for a table, but can also be variable. In that case the first column holds the record type.
+Every record may consist of one or more columns. Every column has a column type and a set of properties.
 
 The following column types have been implemented:
 - integer (default)
-- record type - allows multiple record types in one table
+- character - using a user-defined character set (subset of ascii)
+- record type - allows multiple record definitions in one table
 - reference - refers to a record in another table
 - virtual - holds no data: returns a column value from a referenced table
 
-The database schema is defined using the prototypes in BitsOfDataTypes.h, see TestBistsOfData.cpp for usage examples.
+The database schema is defined by the caller, using the prototypes in BitsOfDataTypes.h, see TestBistsOfData.cpp for usage examples.
 
 ## Language
 
-The embedded code is written in C and all test code is in C++.
+The embedded code is written in C and all test code is in C++, using CppuTest
 
 ## Testing
 This project consists of two parts:
 - Embedded library code
 - Host-based unit tests for core logic validation
 
-Unit tests are implemented using CppUnitTest and run on the host system.
+Unit tests are implemented using https://cpputest.github.io/ and run on the host system.
 Tests validate core database logic and are not part of the embedded firmware build.
 
 ## Notes
