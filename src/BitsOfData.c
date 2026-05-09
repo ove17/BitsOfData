@@ -13,7 +13,7 @@
 #include "WriteColumns.h"
 #include "MathUtils.h"
 
-#include <stdio.h>  // FIXME: remove
+#include <stdio.h>  // FIXME: remove when stable
 #define NO_RECORD_ID 0xFF
 #define INVALID_VALUE 0xFFFF
 
@@ -31,6 +31,8 @@ extern void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef);
 static recordBufferT* RecordBuffers = NULL;
 static uint8_t* RawRecordBuffer = NULL;
 static const BDB_dbaseDefT* DbaseDef = NULL;
+
+static uint8_t (*GetTxtPtr)(const char**, const uint8_t) = NULL;
 
 
 static void allocateRecordBuffers(void);
@@ -94,8 +96,10 @@ static bool shiftRecordReferencesUp(const uint8_t refTableId,
 
 
 // returns true if a database was found and opened, false if one was created
-bool BDB_openDataBase(const BDB_dbaseDefT* dbaseDef) {
+bool BDB_openDataBase(const BDB_dbaseDefT* dbaseDef,
+                      uint8_t (*txtHandler)(const char**, const uint8_t)) {
     DbaseDef = dbaseDef;
+    GetTxtPtr = txtHandler;
 #ifndef NDEBUG
     assertDbaseDefIsValid(DbaseDef);
 #endif
@@ -145,6 +149,7 @@ static uint8_t getMaxNumColumns(const uint8_t tableId) {
     }
     //FIXME testing recordCodec requires MAX_NUM_COLUMNS == 6 :
     //   BUT WE SHOULD: assert(maxNumColumns == MAX_NUM_COLUMNS);
+    // can this be fixed with a macro?
     return maxNumColumns;
 }
 
@@ -304,7 +309,7 @@ bool BDB_setValue (const uint8_t tableId,
     const uint16_t column0value = RecordBuffers[tableId].columns[0];
     const BDB_recordT* recordDef = getRecordDef(tableId, column0value);
     const BDB_columnT* columnDef = &recordDef->columns[columnId];
-    if (value < columnDef->minValue
+    if (       value < columnDef->minValue
             || value > getMaxValue(columnDef)
             || rc_isVirtualColumn(columnDef)
             || !validateDecimalValue(columnDef, value)) {
@@ -589,6 +594,21 @@ char* BDB_getWriteBuffer(void) {
 }
 
 
+static uint8_t getMaxLengthFromTxtList(const uint8_t* const txtList,
+                                       const uint8_t listSize) {
+    uint8_t maxLength = 0;
+    for (uint8_t i = 0; i < listSize; i++) {
+        const char** dummyPtr = NULL;
+        const uint8_t index = txtList[i];
+        const uint8_t length = GetTxtPtr(dummyPtr, index);
+        if (length > maxLength) {
+            maxLength = length;
+        }
+    }
+    return maxLength;
+}
+
+
 // takes startposition for writing value and returns the next empty position
 uint8_t BDB_writeValue(const uint8_t tableId,
                        const uint8_t recordId,
@@ -605,6 +625,25 @@ uint8_t BDB_writeValue(const uint8_t tableId,
             position += numDigits;
             break;
         }
+        case BDB_COLUMN_INT_ZEROTXT : {
+            assert(GetTxtPtr != NULL); // column relies on static text
+            const uint16_t maxValue = columnDef->maxValue;
+            const uint8_t numDigits = mu_getNumDigits(maxValue);
+            const char* int0text = NULL;
+            GetTxtPtr(&int0text, columnDef->int0txt);
+            wc_writeIntZeroTxt(value, numDigits, int0text);
+            position += numDigits;
+            break;
+        }
+        case BDB_COLUMN_TXT_LIST : {
+            assert(GetTxtPtr != NULL); // column relies on static text
+            const uint8_t maxValue = (uint8_t)columnDef->maxValue;
+            const uint8_t maxLen = getMaxLengthFromTxtList(columnDef->txtList, maxValue);
+            const char* textFromList = NULL;
+            GetTxtPtr(&textFromList, columnDef->txtList[value]);
+            wc_writeTxt(textFromList, maxLen);
+            break;
+        }
         case BDB_COLUMN_DECIMAL : {
             const uint16_t maxValue = columnDef->maxValue;
             uint8_t numDigits = mu_getNumDigits(maxValue) + 1; // +1 for decimal point
@@ -616,14 +655,14 @@ uint8_t BDB_writeValue(const uint8_t tableId,
             break;
         }
         case BDB_COLUMN_CHAR : {
-            assert(value <= columnDef->maxValue); // must be impossible
             wc_writeChar((uint8_t)value, columnDef->charSet);
             position++;
             break;
         }
         case BDB_COLUMN_STRING : {
             for (uint8_t c = 0; c < columnDef->strLength; c++) {
-                position = BDB_writeValue(tableId, recordId, columnDef->strFirstChar + c, position);
+                const uint8_t columnId = columnDef->strFirstChar + c;
+                position = BDB_writeValue(tableId, recordId, columnId, position);
             }
             break;
         }

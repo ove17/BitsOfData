@@ -30,6 +30,15 @@ static void assertIntegerColumnIsValid(const BDB_columnT* columnDef) {
 }
 
 
+static void assertIntZeroTxtColumnIsValid(const BDB_columnT* columnDef) {
+    assert(columnDef->minValue == 0);
+    assert(columnDef->maxValue > 0);
+    assert(columnDef->defaultVal <= columnDef->maxValue);
+    assert(columnDef->int0txt > 0);
+    // NOTE: assertion GetTxtPtr != NULL must be in BitsOfData.c
+}
+
+
 static void assertDecimalColumnIsValid(const BDB_columnT* columnDef) {
     assert(columnDef->maxValue > columnDef->minValue);
     assert(columnDef->defaultVal >= columnDef->minValue);
@@ -58,7 +67,8 @@ static void assertRecordTypeColumnIsValid(const BDB_tableT* tableDef,
 
 static void assertCharColumnIsValid(const BDB_columnT* columnDef) {
     const uint8_t maxCharIndex = (uint8_t)columnDef->maxValue;
-    assert(columnDef->charSet[maxCharIndex+1] == '\0');
+    assert(columnDef->charSet != NULL);
+    assert(columnDef->charSet[maxCharIndex + 1] == '\0');
     assert(columnDef->minValue == 0);
     assert(columnDef->defaultVal == 0);
     assert(columnDef->maxValue > 0);
@@ -118,6 +128,15 @@ static void assertStringColumnIsValid(const BDB_recordT* recordDef,
 }
 
 
+static void assertTxtListColumnIsValid(const BDB_columnT* columnDef) {
+    assert(columnDef->minValue == 0);
+    assert(columnDef->maxValue > 0);
+    assert(columnDef->defaultVal <= columnDef->maxValue);
+    assert(columnDef->txtList != NULL);
+    // NOTE: assertion GetTxtPtr != NULL must be in BitsOfData.c
+}
+
+
 void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef) {
     const uint8_t numTables = dbaseDef->numTables;
     for (TableId = 0; TableId < numTables; TableId++) {
@@ -132,6 +151,10 @@ void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef) {
                 switch(columnDef->colType) {
                     case BDB_COLUMN_INTEGER :
                         assertIntegerColumnIsValid(columnDef);
+                        ASSERT_VALID(!virtualColumnPresent);
+                        break;
+                    case BDB_COLUMN_INT_ZEROTXT :
+                        assertIntZeroTxtColumnIsValid(columnDef);
                         ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_DECIMAL :
@@ -157,6 +180,10 @@ void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef) {
                     case BDB_COLUMN_STRING :
                         assertStringColumnIsValid(recordDef, columnDef);
                         virtualColumnPresent = true;
+                        break;
+                    case BDB_COLUMN_TXT_LIST :
+                        assertTxtListColumnIsValid(columnDef);
+                        ASSERT_VALID(!virtualColumnPresent);
                         break;
                     default :
                         assert(0 && "Invalid columnType");

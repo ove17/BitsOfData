@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include "BitsOfDataTypes.h"
 
+//TODO: must also include txt enum & txt
 
 static const char charSet[] =   " 123456789" \
                                 "0_ABCDEFGH" \
@@ -15,11 +16,13 @@ static const char charSet[] =   " 123456789" \
                                 "STUVWXYZ-+" \
                                 ".";
 
-#define CHARSET_SIZE (sizeof(charSet)/sizeof(char) - 1) // -1 because of trailing \0
+#define CHARSET_SIZE (sizeof(charSet)/sizeof(char) - 1) // -1 because of \0
 #define CHARSET_MAX (CHARSET_SIZE - 1) // -1 because it starts at 0
 
 
 static const uint8_t maxNumRecordsInTable2 = 15;
+static const uint8_t txtList[] = { 1, 2, 0 };
+#define TXT_LIST_LENGTH (sizeof(txtList) / sizeof(uint8_t))
 
 static const BDB_recordT recordDef = {
     .numColumns = 5,
@@ -27,7 +30,7 @@ static const BDB_recordT recordDef = {
         {.maxValue = 8, .defaultVal = 7, .minValue = 3},
         {.maxValue = 4000, .defaultVal = 1234,},
         {.colType = BDB_COLUMN_REFERENCE, .refTable = 2, .maxValue = maxNumRecordsInTable2 - 1,},
-        {.maxValue = 3, .defaultVal = 2, .minValue = 2},
+        {.colType = BDB_COLUMN_INT_ZEROTXT, .maxValue = 10, .defaultVal = 2, .int0txt = 2},
         {.colType = BDB_COLUMN_VIRTUAL, .virtRecordCol = 2, .virtValueCol = 1},
     },
 };
@@ -53,13 +56,14 @@ static const BDB_columnT recordTypeColumn = {
 };
 
 static const BDB_recordT recordDef0 = {
-    .numColumns = 5,
+    .numColumns = 6,
     .columns = {
         recordTypeColumn,
         {.maxValue = 300, .defaultVal = 150},
         {.colType = BDB_COLUMN_DECIMAL, .maxValue = 100, .decimalShift = 4, .decStep = 1},
         {.maxValue = 1024, .defaultVal = 255},
         {.colType = BDB_COLUMN_DECIMAL, .minValue = 5, .maxValue = 995, .defaultVal = 10, .decimalShift = 1, .decStep = 5},
+        {.colType = BDB_COLUMN_TXT_LIST, .maxValue = TXT_LIST_LENGTH - 1, .txtList = txtList},
     },
 };
 static const BDB_recordT recordDef1 = {

@@ -15,14 +15,12 @@
 
 typedef enum {
     BDB_COLUMN_INTEGER,     // =0, so default
-//    BDB_COLUMN_INT_ZEROVAL,	// prints a string instead of 0
+    BDB_COLUMN_INT_ZEROTXT,	// prints text instead of 0
     BDB_COLUMN_DECIMAL,
     BDB_COLUMN_RECORD_TYPE,	// for variable record typs
     BDB_COLUMN_CHAR,
     BDB_COLUMN_STRING,		// no data, points to CHAR's
-//    BDB_COLUMN_SYMBOL_LIST,
-//    BDB_COLUMN_STRING_LIST,
-//    BDB_COLUMN_STRING_LISTS,
+    BDB_COLUMN_TXT_LIST,
     BDB_COLUMN_REFERENCE,	// reference to a record (, column) in another table
     BDB_COLUMN_VIRTUAL,		// no data, column in another table
 } BDB_colTypeT;
@@ -33,15 +31,12 @@ typedef enum {
  *
                                          setValue
                              getValue   changeValue	 printValue
- BDB_COLUMN_RECORD_TYPE     recordDefId		ok			n/a
+ BDB_COLUMN_RECORD_TYPE     recordDefId		ok		   n/a
  BDB_COLUMN_INTEGER             int			ok			ok
- BDB_COLUMN_INTEGER_ZEROSTR     int			ok			ok			.zeroStr
- BDB_COLUMN_INTEGER_MAXSTR      int			ok			ok			.maxStr
+ BDB_COLUMN_INTEGER_ZEROSTR     int			ok			ok
  BDB_COLUMN_DECIMAL          int*step		ok			ok
  BDB_COLUMN_CHAR                int			ok			ok
- BDB_COLUMN_SYMBOL_LIST         int			ok			ok			.symbolListId
- BDB_COLUMN_STRING_LIST         int			ok			ok			.strListId
- BDB_COLUMN_STRING_LISTS        int			ok			ok			.strListIds
+ BDB_COLUMN_TXT_LIST            int			ok			ok
  BDB_COLUMN_REFERENCE        recordId       ok        refCol
 
  // the following columns hold no data:
@@ -63,21 +58,12 @@ typedef struct {
             uint8_t decimalShift;   // left-shift of decimal point: >0 && <=5
             uint8_t decStep;        // allows steps of 1, 2 or 5
         };
-/*
-        struct { // INTEGER_ZEROVAL:
-            uint8_t int0String;	// string to display if value == 0
+        struct { // INTEGER_ZEROTXT:
+            uint8_t int0txt;        // id of static text to display if value == 0
         };
-        struct { // SYMBOL:
-            uint8_t* symbolList;	// list of custom symbols (non-ascii)
+        struct { // TXT_LIST
+            const uint8_t* txtList;	// list of static text id's
         };
-        struct { // STRING_LIST
-            uint8_t* stringList;	// list of (translatable) string id
-        };
-        struct { // STRING_LISTS
-            uint8_t* stringLists;	//  list of (list of string ids)
-            uint8_t stringListColumn;	// column that determines which list is used
-        };
-*/
         struct { // CHAR:
             const char* charSet;
         };
@@ -101,7 +87,7 @@ typedef struct {
 //	NOTE: so settings can be record(type)s, rather than columns! Fewer exceptions!
 typedef struct {
     uint8_t numColumns;
-//    uint8_t formatString;   // TODO id of (translatable) string
+//    uint8_t formatString;   // TODO id of (translatable) txt
                                 // AND how does this fit here? or elsewhere?
     BDB_columnT columns[MAX_NUM_COLUMNS];   // pointer to array of column definitions
 } BDB_recordT;

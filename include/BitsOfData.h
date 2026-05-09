@@ -29,7 +29,8 @@
 #include "BitsOfDataTypes.h"
 
 
-bool BDB_openDataBase(const BDB_dbaseDefT* dbaseDef);
+bool BDB_openDataBase(const BDB_dbaseDefT* dbaseDef,
+					  uint8_t (*txtHandler)(const char**, const uint8_t));
 void BDB_closeDataBase(void);
 
 uint16_t BDB_getValue(const uint8_t tableId,

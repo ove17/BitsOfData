@@ -1,15 +1,5 @@
 // TestBitsOfData.cpp
 
-/*
- * TDD approach:
- * 1)   implement explicit data model tests
- * 2)   implement pure API tests
- * 3)   rewrite explicit data model tests, using API functions where possible
- * 4)   remove tests from 1) that cannot fail independently from 2) or 3)
- * 5)   mark all remaining tests from 1) as "data model dependent"
- *
- */
-
 #include "CppUTest/TestHarness.h"
 #include "cpputestUtils.h"
 
@@ -34,95 +24,98 @@ TEST_GROUP(OpenDbase) {
 
 
 TEST(OpenDbase, openDataBaseWhenNoneExistsReturnsFalse) {
-    CHECK_FALSE(BDB_openDataBase(&dbaseDef));
+    CHECK_FALSE(BDB_openDataBase(&dbaseDef, NULL));
 }
 
 
 TEST(OpenDbase, openDataBaseWhenOneExistsReturnsTrue) {
-    BDB_openDataBase(&dbaseDef);
+    BDB_openDataBase(&dbaseDef, NULL);
     BDB_closeDataBase();
-    CHECK_TRUE(BDB_openDataBase(&dbaseDef));
+    CHECK_TRUE(BDB_openDataBase(&dbaseDef, NULL));
 }
 
 
-TEST(OpenDbase, getNumRecordsReturns1onNewTable) {
-    BDB_openDataBase(&dbaseDef);
+// Use Dbase without getTxt functions
+
+
+TEST_GROUP(UseDbase) {
+    void setup() {
+        eeClear();
+        BDB_openDataBase(&dbaseDef, NULL);
+    }
+
+    void teardown() {
+        BDB_closeDataBase();
+    }
+};
+
+
+TEST(UseDbase, getNumRecordsReturns1onNewTable) {
     BYTES_EQUAL(1, BDB_getNumRecords(0));
 }
 
 
-TEST(OpenDbase, getNumRecordsReturns1onNewVarRecordTable) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, getNumRecordsReturns1onNewVarRecordTable) {
     BYTES_EQUAL(1, BDB_getNumRecords(1));
 }
 
 
-TEST(OpenDbase, getNumRecordsReturns2onNewVarRecordTableWithExtraRecord) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, getNumRecordsReturns2onNewVarRecordTableWithExtraRecord) {
     BDB_insertRecordAfter(1, 0);
     BYTES_EQUAL(2, BDB_getNumRecords(1));
 }
 
 
-TEST(OpenDbase, getNumRealColumnsReturnsNumColumnsWithoutVirtual) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, getNumRealColumnsReturnsNumColumnsWithoutVirtual) {
     BYTES_EQUAL(4, BDB_getNumRealColumns(0, 0));
 }
 
 
-TEST(OpenDbase, getNumRealColumnsReturnsNumColumnsWithoutVirtualForVariableRecordType) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, getNumRealColumnsReturnsNumColumnsWithoutVirtualForVariableRecordType) {
     BDB_setValue(1, 0, 0, 1); // set to 2nd recordType
     BYTES_EQUAL(3, BDB_getNumRealColumns(1, 0));
 }
 
 
-TEST(OpenDbase, newTableHasrecordWithDefaultColValues) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, newTableHasrecordWithDefaultColValues) {
     LONGS_EQUAL(7, BDB_getValue(0, 0, 0));
     LONGS_EQUAL(1234, BDB_getValue(0, 0, 1));
 }
 
 
-TEST(OpenDbase, openDbaseStoresDefaultsOf1stRecord) {
-    CHECK_FALSE(BDB_openDataBase(&dbaseDef));
+TEST(UseDbase, openDbaseStoresDefaultsOf1stRecord) {
     LONGS_EQUAL(7, BDB_getValue(0, 0, 0));
     BDB_closeDataBase();
-    CHECK_TRUE(BDB_openDataBase(&dbaseDef));
+    CHECK_TRUE(BDB_openDataBase(&dbaseDef, NULL));
     LONGS_EQUAL(7, BDB_getValue(0, 0, 0));
 }
 
 
-TEST(OpenDbase, setValueFailsIfValueIsBelowMin) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setValueFailsIfValueIsBelowMin) {
     CHECK_FALSE(BDB_setValue(0, 0, 0, 2));
     BYTES_EQUAL(7, BDB_getValue(0, 0, 0));
 }
 
 
-TEST(OpenDbase, setValueSucceedsIfValueIsMin) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setValueSucceedsIfValueIsMin) {
     CHECK_TRUE(BDB_setValue(0, 0, 0, 3));
     BYTES_EQUAL(3, BDB_getValue(0, 0, 0));
 }
 
 
-TEST(OpenDbase, setValueFailsIfValueIsAboveMax) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setValueFailsIfValueIsAboveMax) {
     CHECK_FALSE(BDB_setValue(0, 0, 0, 9));
     BYTES_EQUAL(7, BDB_getValue(0, 0, 0));
 }
 
 
-TEST(OpenDbase, setValueSucceedsIfValueIsMax) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setValueSucceedsIfValueIsMax) {
     CHECK_TRUE(BDB_setValue(0, 0, 0, 8));
     BYTES_EQUAL(8, BDB_getValue(0, 0, 0));
 }
 
 
-TEST(OpenDbase, setValueIsReturnedWithGetValue) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setValueIsReturnedWithGetValue) {
     BDB_setValue(0, 0, 0, 3);
     BYTES_EQUAL(3, BDB_getValue(0, 0, 0));
     BDB_setValue(0, 0, 1, 3456);
@@ -130,88 +123,77 @@ TEST(OpenDbase, setValueIsReturnedWithGetValue) {
 }
 
 
-TEST(OpenDbase, changeValueUpWhenItIsAlreadyMaxFails) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueUpWhenItIsAlreadyMaxFails) {
     BDB_setValue(0, 0, 0, 8);
     CHECK_FALSE(BDB_changeValue(0, 0, 0, 1));
     BYTES_EQUAL(8, BDB_getValue(0, 0, 0));
 }
 
 
-TEST(OpenDbase, changeValueUpBy1Succeeds) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueUpBy1Succeeds) {
     BYTES_EQUAL(7, BDB_getValue(0, 0, 0));
     CHECK_TRUE(BDB_changeValue(0, 0, 0, 1));
     BYTES_EQUAL(8, BDB_getValue(0, 0, 0));
 }
 
 
-TEST(OpenDbase, changeValueDownWhenItIsAlreadyMinFails) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueDownWhenItIsAlreadyMinFails) {
     BDB_setValue(0, 0, 0, 3);
     CHECK_FALSE(BDB_changeValue(0, 0, 0, -1));
     BYTES_EQUAL(3, BDB_getValue(0, 0, 0));
 }
 
 
-TEST(OpenDbase, changeValueDownBy1Succeeds) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueDownBy1Succeeds) {
     BDB_setValue(0, 0, 0, 4);
     CHECK_TRUE(BDB_changeValue(0, 0, 0, -1));
     BYTES_EQUAL(3, BDB_getValue(0, 0, 0));
 }
 
 
-TEST(OpenDbase, changeValueUpBy100IfItIsMaxFails) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueUpBy100IfItIsMaxFails) {
     BDB_setValue(0, 0, 1, 4000);
     CHECK_FALSE(BDB_changeValue(0, 0, 1, 100));
     BYTES_EQUAL(4000, BDB_getValue(0, 0, 1));
 }
 
 
-TEST(OpenDbase, changeValueUpBy100Succeeds) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueUpBy100Succeeds) {
     BDB_setValue(0, 0, 1, 3900);
     CHECK_TRUE(BDB_changeValue(0, 0, 1, 100));
     BYTES_EQUAL(4000, BDB_getValue(0, 0, 1));
 }
 
 
-TEST(OpenDbase, changeValueUpBy100IfItIs50BelowMaxSucceedsAndAdds50) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueUpBy100IfItIs50BelowMaxSucceedsAndAdds50) {
     BDB_setValue(0, 0, 1, 3950);
     CHECK_TRUE(BDB_changeValue(0, 0, 1, 100));
     BYTES_EQUAL(4000, BDB_getValue(0, 0, 1));
 }
 
 
-TEST(OpenDbase, changeValueDownBy100IfItIsMinFails) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueDownBy100IfItIsMinFails) {
     BDB_setValue(0, 0, 1, 0);
     CHECK_FALSE(BDB_changeValue(0, 0, 1, -100));
     BYTES_EQUAL(0, BDB_getValue(0, 0, 1));
 }
 
 
-TEST(OpenDbase, changeValueDownBy100Succeeds) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueDownBy100Succeeds) {
     BDB_setValue(0, 0, 1, 100);
     CHECK_TRUE(BDB_changeValue(0, 0, 1, -100));
     BYTES_EQUAL(0, BDB_getValue(0, 0, 1));
 }
 
 
-TEST(OpenDbase, changeValueDownBy100IfItIs50AboveMinSucceedsAndSubtrackts50) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueDownBy100IfItIs50AboveMinSucceedsAndSubtrackts50) {
     BDB_setValue(0, 0, 1, 50);
     CHECK_TRUE(BDB_changeValue(0, 0, 1, -100));
     BYTES_EQUAL(0, BDB_getValue(0, 0, 1));
 }
 
 
-TEST(OpenDbase, retrievingDifferentRecordsInTheSameTableConsecutivelyWorks) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, retrievingDifferentRecordsInTheSameTableConsecutivelyWorks) {
     BDB_insertRecordAfter(0, 0);
     CHECK_TRUE(BDB_setValue(0, 0, 0, 4));
     CHECK_TRUE(BDB_setValue(0, 1, 0, 6));
@@ -223,51 +205,44 @@ TEST(OpenDbase, retrievingDifferentRecordsInTheSameTableConsecutivelyWorks) {
 // variable recordDefs
 
 
-TEST(OpenDbase, inVariableRecordDefTable_The1stColumnHoldsTheRecordDef) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, inVariableRecordDefTable_The1stColumnHoldsTheRecordDef) {
     LONGS_EQUAL(0, BDB_getValue(1, 0, 0)); // default = 0 !
 }
 
 
-TEST(OpenDbase, inVariableRecordDefTable_SettingRecordTypeOutOfRangeReturnsFalse) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, inVariableRecordDefTable_SettingRecordTypeOutOfRangeReturnsFalse) {
     CHECK_FALSE(BDB_setValue(1,0,0,2));
     LONGS_EQUAL(0, BDB_getValue(1, 0, 0)); // unchanged
 }
 
 
-TEST(OpenDbase, inVariableRecordDefTable_DefaultRecordTypeIsThe1st) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, inVariableRecordDefTable_DefaultRecordTypeIsThe1st) {
     LONGS_EQUAL(150, BDB_getValue(1, 0, 1));
     LONGS_EQUAL(  0, BDB_getValue(1, 0, 2));
     LONGS_EQUAL(255, BDB_getValue(1, 0, 3));
 }
 
 
-TEST(OpenDbase, inVariableRecordDefTable_ChangingRecordTypeSetsDefaults) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, inVariableRecordDefTable_ChangingRecordTypeSetsDefaults) {
     BDB_setValue(1, 0, 0, 1);
     LONGS_EQUAL(45, BDB_getValue(1, 0, 1));
 }
 
 
-TEST(OpenDbase, inVariableRecordDefTable_changeValueWorksOnNormalColumns) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, inVariableRecordDefTable_changeValueWorksOnNormalColumns) {
     BDB_changeValue(1, 0, 1, 10);
     LONGS_EQUAL(160, BDB_getValue(1, 0, 1));
 }
 
 
-TEST(OpenDbase, inVariableRecordDefTable_changeValueWorksOnRecordTypeColumn) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, inVariableRecordDefTable_changeValueWorksOnRecordTypeColumn) {
     CHECK_TRUE(BDB_changeValue(1, 0, 0, 1));
     LONGS_EQUAL(1, BDB_getValue(1, 0, 0));
     LONGS_EQUAL(45, BDB_getValue(1, 0, 1));
 }
 
 
-TEST(OpenDbase, inVariableRecordDefTable_changeValueFailsWhenOutOfRange) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, inVariableRecordDefTable_changeValueFailsWhenOutOfRange) {
     BDB_setValue(1, 0, 0, 1);
     CHECK_FALSE(BDB_changeValue(1, 0, 0, 1));
     LONGS_EQUAL(1, BDB_getValue(1, 0, 0));
@@ -275,16 +250,14 @@ TEST(OpenDbase, inVariableRecordDefTable_changeValueFailsWhenOutOfRange) {
 }
 
 
-TEST(OpenDbase, inVariableRecordDefTable_changeValueSetsToMaxWhenItWouldExceed) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, inVariableRecordDefTable_changeValueSetsToMaxWhenItWouldExceed) {
     CHECK_TRUE(BDB_changeValue(1, 0, 0, 2));
     LONGS_EQUAL(1, BDB_getValue(1, 0, 0));
     LONGS_EQUAL(45, BDB_getValue(1, 0, 1));
 }
 
 
-TEST(OpenDbase, inVariableRecordDefTableRetrievingRecordWithDifferentTypesConsecutivelyWorks) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, inVariableRecordDefTableRetrievingRecordWithDifferentTypesConsecutivelyWorks) {
     BDB_insertRecordAfter(1, 0);
     CHECK_TRUE(BDB_setValue(1, 0, 0, 0)); // set recordType to 0
     CHECK_TRUE(BDB_setValue(1, 1, 0, 1)); // set recordType to 1
@@ -296,66 +269,59 @@ TEST(OpenDbase, inVariableRecordDefTableRetrievingRecordWithDifferentTypesConsec
 // recordBuffer
 
 
-TEST(OpenDbase, gettingSameRecordConsecutivelyDoesNotRetreiveRecordAgain) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, gettingSameRecordConsecutivelyDoesNotRetreiveRecordAgain) {
     LONGS_EQUAL(7, BDB_getValue(0, 0, 0));
     eeClear();
     LONGS_EQUAL(7, BDB_getValue(0, 0, 0));
 }
 
 
-TEST(OpenDbase, settingARecordDoesNotStoreIt) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, settingARecordDoesNotStoreIt) {
     CHECK_TRUE(BDB_setValue(0, 0, 0, 5));
     BDB_closeDataBase();
-    CHECK_TRUE(BDB_openDataBase(&dbaseDef));
+    CHECK_TRUE(BDB_openDataBase(&dbaseDef, NULL));
     LONGS_EQUAL(7, BDB_getValue(0, 0, 0)); // the default value
 }
 
 
-TEST(OpenDbase, storeRecordStoresBuffer) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, storeRecordStoresBuffer) {
     BDB_setValue(0, 0, 0, 6);
     BDB_storeRecord(0, 0);
     BDB_setValue(0, 0, 0, 5);
     BDB_closeDataBase();
-    CHECK_TRUE(BDB_openDataBase(&dbaseDef));
+    CHECK_TRUE(BDB_openDataBase(&dbaseDef, NULL));
     LONGS_EQUAL(6, BDB_getValue(0, 0, 0));
 }
 
 
-TEST(OpenDbase, settingSameRecordConsecutivelyDoesNotStoreRecord) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, settingSameRecordConsecutivelyDoesNotStoreRecord) {
     BDB_setValue(0, 0, 0, 6);
     BDB_setValue(0, 0, 0, 5);
     BDB_closeDataBase();
-    CHECK_TRUE(BDB_openDataBase(&dbaseDef));
+    CHECK_TRUE(BDB_openDataBase(&dbaseDef, NULL));
     LONGS_EQUAL(7, BDB_getValue(0, 0, 0)); // the default value
 }
 
 
-TEST(OpenDbase, accessingAnotherRecordInTheSameTable_StoresRecordBuffer) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, accessingAnotherRecordInTheSameTable_StoresRecordBuffer) {
     BDB_insertRecordAfter(0, 0);
     CHECK_TRUE(BDB_setValue(0, 0, 0, 5));
     CHECK_TRUE(BDB_setValue(0, 1, 0, 6));
     BDB_closeDataBase();
-    CHECK_TRUE(BDB_openDataBase(&dbaseDef));
+    CHECK_TRUE(BDB_openDataBase(&dbaseDef, NULL));
     LONGS_EQUAL(5, BDB_getValue(0, 0, 0));
 }
 
 
-TEST(OpenDbase, changeValueDoesNotStoreRecord) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueDoesNotStoreRecord) {
     CHECK_TRUE(BDB_changeValue(0, 0, 0, 1));
     BDB_closeDataBase();
-    CHECK_TRUE(BDB_openDataBase(&dbaseDef));
+    CHECK_TRUE(BDB_openDataBase(&dbaseDef, NULL));
     LONGS_EQUAL(7, BDB_getValue(0, 0, 0));
 }
 
 
-TEST(OpenDbase, changeValueUsesBufferedValue) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueUsesBufferedValue) {
     CHECK_TRUE(BDB_changeValue(0, 0, 0, -1));
     eeClear();
     CHECK_TRUE(BDB_changeValue(0, 0, 0, -1));
@@ -363,35 +329,32 @@ TEST(OpenDbase, changeValueUsesBufferedValue) {
 }
 
 
-TEST(OpenDbase, changeValueOnAnotherRecordStoresPreviousRecord) {
-    CHECK_FALSE(BDB_openDataBase(&dbaseDef));
+TEST(UseDbase, changeValueOnAnotherRecordStoresPreviousRecord) {
     BDB_insertRecordAfter(0, 0);
     CHECK_TRUE(BDB_changeValue(0, 0, 0, 1));
     LONGS_EQUAL(8, BDB_getValue(0, 0, 0));
     CHECK_TRUE(BDB_changeValue(0, 1, 1, 1));
     LONGS_EQUAL(1235, BDB_getValue(0, 1, 1));
     BDB_closeDataBase();
-    CHECK_TRUE(BDB_openDataBase(&dbaseDef));
+    CHECK_TRUE(BDB_openDataBase(&dbaseDef, NULL));
     LONGS_EQUAL(8, BDB_getValue(0, 0, 0));  // stored
     LONGS_EQUAL(1234, BDB_getValue(0, 1, 1)); // not stored
 }
 
 
-TEST(OpenDbase, accessingARecordInAnotherTable_DoesNotStoreRecordBuffer) {
-    CHECK_FALSE(BDB_openDataBase(&dbaseDef));
+TEST(UseDbase, accessingARecordInAnotherTable_DoesNotStoreRecordBuffer) {
     CHECK_TRUE(BDB_insertRecordAfter(1, 0));
     BDB_setValue(0, 0, 0, 6);
     BDB_setValue(1, 1, 1, 40);
     BDB_closeDataBase();
-    CHECK_TRUE(BDB_openDataBase(&dbaseDef));
+    CHECK_TRUE(BDB_openDataBase(&dbaseDef, NULL));
     LONGS_EQUAL(7, BDB_getValue(0, 0, 0));
     LONGS_EQUAL(150, BDB_getValue(1, 1, 1));
 }
 
 
 // NOTE: an actual change is not required, an edit without change suffices
-TEST(OpenDbase, changingToAnotherRecordDoesNotStoreIfValueWasNotEdited) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changingToAnotherRecordDoesNotStoreIfValueWasNotEdited) {
     BDB_insertRecordAfter(0, 0);
     BDB_setValue(0, 0, 0, 6);
     BDB_setValue(0, 1, 0, 5);   // must store rec0=6
@@ -406,15 +369,13 @@ TEST(OpenDbase, changingToAnotherRecordDoesNotStoreIfValueWasNotEdited) {
 // set/get records
 
 
-TEST(OpenDbase, getRecordOnSingleRecDefReturnsAllNonVirtualColumns) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, getRecordOnSingleRecDefReturnsAllNonVirtualColumns) {
     uint16_t record0[] = { 7, 1234, 0, 2 };
     CHECK_UINT16_ARRAY_EQUAL(record0, BDB_getRecord(0, 0), 4);
 }
 
 
-TEST(OpenDbase, getRecordOnVariableRecDefReturnsAllNonVirtualColumns) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, getRecordOnVariableRecDefReturnsAllNonVirtualColumns) {
     BDB_insertRecordAfter(1, 0);
     CHECK_TRUE(BDB_setValue(1, 0, 0, 0)); // set recordType to 0
     CHECK_TRUE(BDB_setValue(1, 1, 0, 1)); // set recordType to 1
@@ -426,10 +387,9 @@ TEST(OpenDbase, getRecordOnVariableRecDefReturnsAllNonVirtualColumns) {
 }
 
 
-TEST(OpenDbase, setRecordToValidRecordSucceeds) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setRecordToValidRecordSucceeds) {
     BDB_insertRecordAfter(1, 0);
-    uint16_t rec1_0[] = { 0, 123, 75, 60, 500};
+    uint16_t rec1_0[] = { 0, 123, 75, 60, 500, 1};
     CHECK_TRUE(BDB_setRecord(1, 0, rec1_0));
     uint16_t rec1_1[] = { 1, 85, 0, };
     CHECK_TRUE(BDB_setRecord(1, 1, rec1_1));
@@ -438,32 +398,28 @@ TEST(OpenDbase, setRecordToValidRecordSucceeds) {
 }
 
 
-TEST(OpenDbase, setRecordToRecordWithValueGtMaxValueFails) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setRecordToRecordWithValueGtMaxValueFails) {
     uint16_t record0[] = { 5, 4001, 0, 2 };
     CHECK_FALSE(BDB_setRecord(0, 0, record0));
     LONGS_EQUAL(1234, BDB_getValue(0, 0, 1)); // unchanged
 }
 
 
-TEST(OpenDbase, setRecordToRecordWithValueLtMinValueFails) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setRecordToRecordWithValueLtMinValueFails) {
     uint16_t record0[] = { 0, 1000, 0, 2 };
     CHECK_FALSE(BDB_setRecord(0, 0, record0));
     LONGS_EQUAL(7, BDB_getValue(0, 0, 0)); // unchanged
 }
 
 
-TEST(OpenDbase, setRecordToRecordWithDecimalWithInvalidStepFails) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setRecordToRecordWithDecimalWithInvalidStepFails) {
     uint16_t record1[] = { 0, 123, 12, 512, 899};
     CHECK_FALSE(BDB_setRecord(1, 0, record1));
     LONGS_EQUAL(10, BDB_getValue(1, 0, 4)); // unchanged
 }
 
 
-TEST(OpenDbase, setRecordToRecordWithInvalidReferenceFails) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setRecordToRecordWithInvalidReferenceFails) {
     uint16_t record0[] = { 4, 123, 8, 3 };
     CHECK_FALSE(BDB_setRecord(0, 0, record0));
     LONGS_EQUAL(0, BDB_getValue(1, 0, 2)); // unchanged
@@ -473,15 +429,13 @@ TEST(OpenDbase, setRecordToRecordWithInvalidReferenceFails) {
 // adding records
 
 
-TEST(OpenDbase, insertRecordCreatesDefaultRecord) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, insertRecordCreatesDefaultRecord) {
     BDB_insertRecordAfter(0, 0);
     LONGS_EQUAL(1234, BDB_getValue(0, 1, 1));
 }
 
 
-TEST(OpenDbase, insertRecordAfterReturnsFalseIfMaxNumRecordsReached) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, insertRecordAfterReturnsFalseIfMaxNumRecordsReached) {
     for (uint8_t rec = 0; rec < 9; rec++) {
         CHECK_TRUE(BDB_insertRecordAfter(0, 0));
     }
@@ -490,14 +444,12 @@ TEST(OpenDbase, insertRecordAfterReturnsFalseIfMaxNumRecordsReached) {
 }
 
 
-TEST(OpenDbase, canRecordBeAddedReturnsTrueIfThereIsOnly1Record) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, canRecordBeAddedReturnsTrueIfThereIsOnly1Record) {
     CHECK_TRUE(BDB_canRecordBeAdded(0));
 }
 
 
-TEST(OpenDbase, canRecordBeAddedReturnsTrueIfThereAre1FewerThanMaxRecords) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, canRecordBeAddedReturnsTrueIfThereAre1FewerThanMaxRecords) {
     for (uint8_t rec = 1; rec < 9; rec++) {
         CHECK_TRUE(BDB_insertRecordAfter(0, 0));
     }
@@ -505,8 +457,7 @@ TEST(OpenDbase, canRecordBeAddedReturnsTrueIfThereAre1FewerThanMaxRecords) {
 }
 
 
-TEST(OpenDbase, canRecordBeAddedReturnsFalseeIfThereAreMaxRecords) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, canRecordBeAddedReturnsFalseeIfThereAreMaxRecords) {
     for (uint8_t rec = 1; rec < 10; rec++) {
         CHECK_TRUE(BDB_insertRecordAfter(0, 0));
     }
@@ -517,42 +468,36 @@ TEST(OpenDbase, canRecordBeAddedReturnsFalseeIfThereAreMaxRecords) {
 // deleting records
 
 
-TEST(OpenDbase, deleteRecordReturnsTrueIfRecordWasDeleted) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, deleteRecordReturnsTrueIfRecordWasDeleted) {
     rs_appendRecord(0);
     CHECK_TRUE(BDB_deleteRecord(0, 0));
 }
 
 
-TEST(OpenDbase, deleteRecordReturnsFalseIfThereIsOnly1Record) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, deleteRecordReturnsFalseIfThereIsOnly1Record) {
     CHECK_FALSE(BDB_deleteRecord(0, 0));
 }
 
 
-TEST(OpenDbase, deleteRecordDeletesRecord) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, deleteRecordDeletesRecord) {
     rs_appendRecord(0);
     BDB_deleteRecord(0, 0);
     BYTES_EQUAL(1, BDB_getNumRecords(0));
 }
 
 
-TEST(OpenDbase, canRecordBeDeleted_ReturnsFalseIfItWasTheLastRecord) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, canRecordBeDeleted_ReturnsFalseIfItWasTheLastRecord) {
     CHECK_FALSE(BDB_canRecordBeDeleted(0, 0));
 }
 
 
-TEST(OpenDbase, canRecordBeDelete_dReturnsTrueIfItHasNoDependencies) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, canRecordBeDelete_dReturnsTrueIfItHasNoDependencies) {
     rs_appendRecord(0);
     CHECK_TRUE(BDB_canRecordBeDeleted(0, 1));
 }
 
 
-TEST(OpenDbase, canRecordBeDeteted_ReturnsFalseIfAnotherRecordReferencesIt) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, canRecordBeDeteted_ReturnsFalseIfAnotherRecordReferencesIt) {
     rs_appendRecord(0);
     rs_appendRecord(2);
     rs_appendRecord(2);
@@ -561,8 +506,7 @@ TEST(OpenDbase, canRecordBeDeteted_ReturnsFalseIfAnotherRecordReferencesIt) {
 }
 
 
-TEST(OpenDbase, canRecordBeDeteted_ReturnsFalseIf_ItIsReferencedFromAVariableRecord) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, canRecordBeDeteted_ReturnsFalseIf_ItIsReferencedFromAVariableRecord) {
     rs_appendRecord(1);
     rs_appendRecord(2);
     rs_appendRecord(2);
@@ -575,24 +519,21 @@ TEST(OpenDbase, canRecordBeDeteted_ReturnsFalseIf_ItIsReferencedFromAVariableRec
 // BDB_COLUMN_INTEGER
 
 
-TEST(OpenDbase, stringValueOf4DigitIntReturnsStringOfLength4) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, stringValueOf4DigitIntReturnsStringOfLength4) {
     BYTES_EQUAL(4, BDB_writeValue(0, 0, 1, 0));
     MEMCMP_EQUAL("1234", BDB_getWriteBuffer(), 4);
 }
 
 
 // where maxDigits == numDigits of .maxValue
-TEST(OpenDbase, stringValueOf1DigitIntReturnsStringOfMaxLength) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, stringValueOf1DigitIntReturnsStringOfMaxLength) {
     BDB_setValue(0, 0, 1, 9);
     BYTES_EQUAL(4, BDB_writeValue(0, 0, 1, 0));
     MEMCMP_EQUAL("   9", BDB_getWriteBuffer(), 4);
 }
 
 
-TEST(OpenDbase, stringValueOfIntWithLeading0ReturnsStringWithLeading0s) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, stringValueOfIntWithLeading0ReturnsStringWithLeading0s) {
     BDB_setValue(2, 0, 0, 14);
     BYTES_EQUAL(3, BDB_writeValue(2, 0, 0, 0));
     MEMCMP_EQUAL("014", BDB_getWriteBuffer(), 3);
@@ -602,28 +543,24 @@ TEST(OpenDbase, stringValueOfIntWithLeading0ReturnsStringWithLeading0s) {
 // BDB_COLUMN_REFERENCE
 
 
-TEST(OpenDbase, setValueOfReferenceColumn_ToExistingRecord_InRefTableSucceeds) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setValueOfReferenceColumn_ToExistingRecord_InRefTableSucceeds) {
     CHECK_TRUE(BDB_setValue(0, 0, 2, 0));
 }
 
 
-TEST(OpenDbase, setValueOfReferenceColumnToNonExistingRecordInRefTableFails) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setValueOfReferenceColumnToNonExistingRecordInRefTableFails) {
     CHECK_FALSE(BDB_setValue(0, 0, 2, 1));
 }
 
 
-TEST(OpenDbase, changeValueOnReferenceColumnToExistingRecordInRefTableSucceeds) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueOnReferenceColumnToExistingRecordInRefTableSucceeds) {
     rs_appendRecord(2);
     rs_appendRecord(2);
     CHECK_TRUE(BDB_changeValue(0, 0, 2, 2));
 }
 
 
-TEST(OpenDbase, changeValueOnReferenceColumnToNonExistingRecordInRefTableFails) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueOnReferenceColumnToNonExistingRecordInRefTableFails) {
     rs_appendRecord(2);
     rs_appendRecord(2);
     CHECK_TRUE(BDB_changeValue(0, 0, 2, 2));
@@ -631,8 +568,7 @@ TEST(OpenDbase, changeValueOnReferenceColumnToNonExistingRecordInRefTableFails) 
 }
 
 
-TEST(OpenDbase, changeValueOnReferenceColumn_ToExistingRecordInRefTable_SetsValueToNumRecords) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueOnReferenceColumn_ToExistingRecordInRefTable_SetsValueToNumRecords) {
     rs_appendRecord(2);
     rs_appendRecord(2);
     CHECK_TRUE(BDB_changeValue(0, 0, 2, 5));
@@ -641,8 +577,7 @@ TEST(OpenDbase, changeValueOnReferenceColumn_ToExistingRecordInRefTable_SetsValu
 }
 
 
-TEST(OpenDbase, deletingALowerRecordInTheRefTableAdjustssRecordReference) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, deletingALowerRecordInTheRefTableAdjustssRecordReference) {
     rs_appendRecord(2); // table 2, record 1
     rs_appendRecord(2); // table 2, record 2
     CHECK_TRUE(BDB_setValue(0, 0, 2, 1)); // references table 2, record 1
@@ -651,8 +586,7 @@ TEST(OpenDbase, deletingALowerRecordInTheRefTableAdjustssRecordReference) {
 }
 
 
-TEST(OpenDbase, insertingALowerRecordInTheRefTableAdjustsRecordReference) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, insertingALowerRecordInTheRefTableAdjustsRecordReference) {
     rs_appendRecord(2); // table 2, record 1
     rs_appendRecord(2); // table 2, record 2
     CHECK_TRUE(BDB_setValue(0, 0, 2, 1)); // references table 2, record 1
@@ -664,20 +598,17 @@ TEST(OpenDbase, insertingALowerRecordInTheRefTableAdjustsRecordReference) {
 // BDB_COLUMN_VIRTUAL
 
 
-TEST(OpenDbase, setValueFailsOnAVirtualColumn) {
-    BDB_openDataBase(&dbaseDef);
-    CHECK_FALSE(BDB_setValue(0, 0, 3, 0));
+TEST(UseDbase, setValueFailsOnAVirtualColumn) {
+    CHECK_FALSE(BDB_setValue(0, 0, 4, 0));
 }
 
 
-TEST(OpenDbase, changeValueFailsOnAVirtualColumn) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueFailsOnAVirtualColumn) {
     CHECK_FALSE(BDB_changeValue(0, 0, 4, 1));
 }
 
 
-TEST(OpenDbase, getValueOnAVirtualColumn_ReturnsValueOfTheReferencedTableColumn) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, getValueOnAVirtualColumn_ReturnsValueOfTheReferencedTableColumn) {
     BDB_setValue(2, 0, 1, 8);
     BYTES_EQUAL(8, BDB_getValue(0, 0, 4));
 }
@@ -686,15 +617,13 @@ TEST(OpenDbase, getValueOnAVirtualColumn_ReturnsValueOfTheReferencedTableColumn)
 // BDB_COLUMN_CHAR
 
 
-TEST(OpenDbase, getValueOnCharReturnsNumericValue) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, getValueOnCharReturnsNumericValue) {
     BDB_setValue(2, 0, 1, 12);
     BYTES_EQUAL(12, BDB_getValue(2, 0, 1));
 }
 
 
-TEST(OpenDbase, writeValueSetsCharFromCharset) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, writeValueSetsCharFromCharset) {
     BDB_setValue(2, 0, 1, 12);
     BYTES_EQUAL(1, BDB_writeValue(2, 0, 1, 0));
     BYTES_EQUAL(charSet[12], BDB_getWriteBuffer()[0]);
@@ -704,26 +633,22 @@ TEST(OpenDbase, writeValueSetsCharFromCharset) {
 // BDB_COLUMN_STRING
 
 
-TEST(OpenDbase, setValueOnStringColumnFails) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setValueOnStringColumnFails) {
     CHECK_FALSE(BDB_setValue(2, 0, 5, 0));
 }
 
 
-TEST(OpenDbase, changeValueOnStringColumnFails) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueOnStringColumnFails) {
     CHECK_FALSE(BDB_changeValue(2, 0, 5, 1));
 }
 
 
-TEST(OpenDbase, getValueOnStringColumnFails) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, getValueOnStringColumnFails) {
     LONGS_EQUAL(0xFFFF, BDB_getValue(2, 0, 5));
 }
 
 
-TEST(OpenDbase, writeValueOnAStringColumnWritesAllChars) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, writeValueOnAStringColumnWritesAllChars) {
     BDB_writeValue(2, 0, 5, 0);
     STRNCMP_EQUAL("    ", BDB_getWriteBuffer() , 4);
 }
@@ -732,54 +657,116 @@ TEST(OpenDbase, writeValueOnAStringColumnWritesAllChars) {
 // BDB_COLUMN_DECIMAL
 
 
-TEST(OpenDbase, setValueToNonStepValueFails) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setValueToNonStepValueFails) {
     CHECK_FALSE(BDB_setValue(1, 0, 4, 238));
 }
 
 
-TEST(OpenDbase, setValueToStepValueSucceeds) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, setValueToStepValueSucceeds) {
     CHECK_TRUE(BDB_setValue(1, 0, 4, 25));
 }
 
 
-TEST(OpenDbase, changeValueBy1IncreasesValueByStep) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, changeValueBy1IncreasesValueByStep) {
     CHECK_TRUE(BDB_changeValue(1, 0, 4, 1));
     LONGS_EQUAL(15, BDB_getValue(1, 0, 4));
 }
 
 
-TEST(OpenDbase, writeValue10_OnDecimalColumnWith1DecimalInsertsPointBeforeLastDigit) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, writeValue10_OnDecimalColumnWith1DecimalInsertsPointBeforeLastDigit) {
     BDB_writeValue(1, 0, 4, 0);
     STRNCMP_EQUAL(" 1.0", BDB_getWriteBuffer(), 4);
 }
 
 
-TEST(OpenDbase, writeValue0_OnDecimalColumnWith4DecimalsInserts0pt000) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, writeValue0_OnDecimalColumnWith4DecimalsInserts0pt000) {
     BDB_writeValue(1, 0, 2, 0);
     STRNCMP_EQUAL("0.0000\n", BDB_getWriteBuffer(), 6);
 }
 
 
-TEST(OpenDbase, writeValue19_OnDecimalColumnWith4DecimalsInserts0tp00) {
-    BDB_openDataBase(&dbaseDef);
+TEST(UseDbase, writeValue19_OnDecimalColumnWith4DecimalsInserts0tp00) {
     BDB_setValue(1, 0, 2, 19);
     BDB_writeValue(1, 0, 2, 0);
     STRNCMP_EQUAL("0.0019\n", BDB_getWriteBuffer(), 6);
 }
 
 
+// Use Dbase with getTxt functions
+
+
+TEST_GROUP(UseDbaseWithTxt) {
+    void setup() {
+        eeClear();
+    }
+
+    void teardown() {
+        BDB_closeDataBase();
+    }
+};
+
+
+static uint8_t length(const char* txt) {
+    for (uint8_t length = 0; ; length++) {
+        if (txt[length] == '\0') return length + 1;
+    }
+}
+
+
+static const char* texts[] = {"zero", "yes", "no"};
+
+
+static uint8_t getTxt(const char** txtPtr, const uint8_t txtId) {
+    if (txtPtr != NULL) { // in case of length-only call
+        *txtPtr = texts[txtId];
+    }
+    return length(texts[txtId]);
+}
+
+
+// BDB_COLUMN_INT_ZEROTXT
+
+
+TEST(UseDbaseWithTxt, writeValue0_onIntZerovalColumn_returnsText) {
+    BDB_openDataBase(&dbaseDef, getTxt);
+    BDB_setValue(0, 0, 3, 0);
+    BDB_writeValue(0, 0, 3, 0);
+    STRNCMP_EQUAL("no", BDB_getWriteBuffer(), 2);
+}
+
+
+TEST(UseDbaseWithTxt, writeValue1_onIntZerovalColumn_returns1) {
+    BDB_openDataBase(&dbaseDef, getTxt);
+    BDB_setValue(0, 0, 3, 1);
+    BDB_writeValue(0, 0, 3, 0);
+    STRNCMP_EQUAL(" 1", BDB_getWriteBuffer(), 2);
+}
+
+
+// BDB_COLUMN_TXT_LIST
+
+
+TEST(UseDbaseWithTxt, writeValue_onTxtListColumn_returnsTextFromFirstId) {
+    BDB_openDataBase(&dbaseDef, getTxt);
+    BDB_setValue(1, 0, 5, 2);
+    BDB_writeValue(1, 0, 5, 0);
+    STRNCMP_EQUAL("zero", BDB_getWriteBuffer(), 4); // returns texts[0], although value = 2 !
+}
+
+
+TEST(UseDbaseWithTxt, writeValue_onTxtListColumn_fillsUpToLengthOfLongestTxtInList) {
+    BDB_openDataBase(&dbaseDef, getTxt);
+    BDB_setValue(1, 0, 5, 1);
+    BDB_writeValue(1, 0, 5, 0);
+    STRNCMP_EQUAL("no  \0", BDB_getWriteBuffer(), 5);
+}
+
+
+
 /* TODO:
  *
- * remaining columnTypes:
- *  BDB_COLUMN_INT_ZEROVAL
- *  BDB_COLUMN_STRING_LIST
+ * remaining columnType:
  *  BDB_COLUMN_SYMBOL_LIST
- *  BDB_COLUMN_STRING_LISTS
  *
  * remaining writeColumnValue implementations for columnTypes
  *
@@ -788,4 +775,5 @@ TEST(OpenDbase, writeValue19_OnDecimalColumnWith4DecimalsInserts0tp00) {
  * writeColumnValue -> start pos - end pos
  *
  * refactor: move API to bottom and all static functions to top
+ * refactor: use getColumnDef, getRecordDef everywhere possible
  */
