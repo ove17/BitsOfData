@@ -28,11 +28,6 @@ void wc_initBuffer(const uint8_t size) {
 }
 
 
-char* wc_getWriteBuffer(void) {
-    return StringBuffer;
-}
-
-
 void wc_freeBuffer(void) {
     if (StringBuffer) {
         free(StringBuffer);
@@ -43,9 +38,19 @@ void wc_freeBuffer(void) {
 }
 
 
+char* wc_getWriteBuffer(void) {
+    return StringBuffer;
+}
+
+
 void wc_setCursorPosition(const uint8_t position) {
     assert(position < Size);
     CursorPosition = position;
+}
+
+
+uint8_t wc_getCursorPosition(void) {
+    return CursorPosition;
 }
 
 
@@ -97,7 +102,8 @@ void wc_writeTxt(const char* txt,
     bool txtFinished = false;
     for (uint8_t i = 0; i < maxLength; i++) {
         if (txt[i] == '\0') txtFinished = true;
-        StringBuffer[i] = txtFinished ? ' ' : txt[i];
+        StringBuffer[CursorPosition] = txtFinished ? ' ' : txt[i];
+        increaseCursorPosition();
     }
 }
 

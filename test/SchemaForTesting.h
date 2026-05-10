@@ -86,6 +86,7 @@ static const BDB_tableT table1 = {
 
 static const BDB_recordT recordDef2 = {
     .numColumns = 6,
+    .txtFormat = 3, // 4th in test cpp
     .columns = {
         {.colType = BDB_COLUMN_INTEGER, .maxValue = 255, .leading0 = true,},
         {.colType = BDB_COLUMN_CHAR, .maxValue = CHARSET_MAX, .charSet = charSet},

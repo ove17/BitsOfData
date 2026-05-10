@@ -35,9 +35,8 @@ TEST(OpenDbase, openDataBaseWhenOneExistsReturnsTrue) {
 }
 
 
+
 // Use Dbase without getTxt functions
-
-
 TEST_GROUP(UseDbase) {
     void setup() {
         eeClear();
@@ -353,7 +352,7 @@ TEST(UseDbase, accessingARecordInAnotherTable_DoesNotStoreRecordBuffer) {
 }
 
 
-// NOTE: an actual change is not required, an edit without change suffices
+// NOTE: an actual change is not required, an edit without change triggers a store
 TEST(UseDbase, changingToAnotherRecordDoesNotStoreIfValueWasNotEdited) {
     BDB_insertRecordAfter(0, 0);
     BDB_setValue(0, 0, 0, 6);
@@ -393,8 +392,8 @@ TEST(UseDbase, setRecordToValidRecordSucceeds) {
     CHECK_TRUE(BDB_setRecord(1, 0, rec1_0));
     uint16_t rec1_1[] = { 1, 85, 0, };
     CHECK_TRUE(BDB_setRecord(1, 1, rec1_1));
-    CHECK_UINT16_ARRAY_EQUAL(rec1_0, BDB_getRecord(1, 0), 4);
     CHECK_UINT16_ARRAY_EQUAL(rec1_1, BDB_getRecord(1, 1), 3);
+    CHECK_UINT16_ARRAY_EQUAL(rec1_0, BDB_getRecord(1, 0), 4);
 }
 
 
@@ -614,6 +613,14 @@ TEST(UseDbase, getValueOnAVirtualColumn_ReturnsValueOfTheReferencedTableColumn) 
 }
 
 
+TEST(UseDbase, writeValueOnAVirtualColumn_WritesValueOfTheReferencedTableColumn) {
+    BDB_setValue(1, 0, 0, 1); // change record definition
+    BDB_setValue(2, 0, 1, 13); // value of referenced table, column
+    BYTES_EQUAL(1, BDB_writeValue(1, 0, 3, 0));
+    BYTES_EQUAL(charSet[13], BDB_getWriteBuffer()[0]);
+}
+
+
 // BDB_COLUMN_CHAR
 
 
@@ -649,8 +656,10 @@ TEST(UseDbase, getValueOnStringColumnFails) {
 
 
 TEST(UseDbase, writeValueOnAStringColumnWritesAllChars) {
+    uint16_t rec2[] = { 185, 12, 16, 0, 28 };
+    CHECK_TRUE(BDB_setRecord(2, 0, rec2));
     BDB_writeValue(2, 0, 5, 0);
-    STRNCMP_EQUAL("    ", BDB_getWriteBuffer() , 4);
+    STRNCMP_EQUAL("AE Q", BDB_getWriteBuffer() , 4);
 }
 
 
@@ -692,9 +701,8 @@ TEST(UseDbase, writeValue19_OnDecimalColumnWith4DecimalsInserts0tp00) {
 }
 
 
+
 // Use Dbase with getTxt functions
-
-
 TEST_GROUP(UseDbaseWithTxt) {
     void setup() {
         eeClear();
@@ -713,7 +721,7 @@ static uint8_t length(const char* txt) {
 }
 
 
-static const char* texts[] = {"zero", "yes", "no"};
+static const char* texts[] = {"zero", "yes", "no", " {0} {1}{2}{3}{4}-{5}"};
 
 
 static uint8_t getTxt(const char** txtPtr, const uint8_t txtId) {
@@ -762,18 +770,14 @@ TEST(UseDbaseWithTxt, writeValue_onTxtListColumn_fillsUpToLengthOfLongestTxtInLi
 }
 
 
+// writeRecord
 
-/* TODO:
- *
- * remaining columnType:
- *  BDB_COLUMN_SYMBOL_LIST
- *
- * remaining writeColumnValue implementations for columnTypes
- *
- * writeRecord
- *
- * writeColumnValue -> start pos - end pos
- *
- * refactor: move API to bottom and all static functions to top
- * refactor: use getColumnDef, getRecordDef everywhere possible
- */
+
+TEST(UseDbaseWithTxt, writeRecordReturnsStringForEntireRecord) {
+    // NOTE: format is texts[4]
+    BDB_openDataBase(&dbaseDef, getTxt);
+    uint16_t rec2[] = { 185, 12, 13, 14, 15 };
+    CHECK_TRUE(BDB_setRecord(2, 0, rec2));
+    BYTES_EQUAL(14, BDB_writeRecord(2, 0));
+    STRNCMP_EQUAL(" 185 ABCD-ABCD", BDB_getWriteBuffer(), 14);
+}

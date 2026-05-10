@@ -29,6 +29,19 @@ TEST_GROUP(WriteColumns) {
 // wc_writeInteger
 
 
+TEST(WriteColumns, getCursorPositionReturnsPosition) {
+    wc_setCursorPosition(5);
+    BYTES_EQUAL(5, wc_getCursorPosition());
+}
+
+
+TEST(WriteColumns, writeIntegerIncreasesCursorPosition) {
+    wc_setCursorPosition(5);
+    wc_writeInteger(0, 3, false);
+    BYTES_EQUAL(5 + 3, wc_getCursorPosition());
+}
+
+
 TEST(WriteColumns, writeIntegerWithValue0writes0) {
     wc_writeInteger(0, 3, false);
     STRNCMP_EQUAL("  0\0", wc_getWriteBuffer(), 4);
@@ -54,6 +67,13 @@ TEST(WriteColumns, writeIntegerWithLeading0_FillsWith0s) {
 
 
 // wc_writeDecimal
+
+
+TEST(WriteColumns, writeDecimalIncreasesCursorPosition) {
+    wc_setCursorPosition(8);
+    wc_writeDecimal(0, 5, 1);
+    BYTES_EQUAL(8 + 5, wc_getCursorPosition());
+}
 
 
 TEST(WriteColumns, writeDecimalWrites0pt0ifValueIs0) {
@@ -92,6 +112,13 @@ TEST(WriteColumns, writeDecimalShiftedBy4_IntroducesZeroPointZero) {
 // wc_writeIntZeroTxt
 
 
+TEST(WriteColumns, writeIntZeroTxtIncreasesCursorPosition) {
+    wc_setCursorPosition(2);
+    wc_writeIntZeroTxt(1, 3, "txt");
+    BYTES_EQUAL(2 + 3, wc_getCursorPosition());
+}
+
+
 TEST(WriteColumns, writeIntZeroTxtWritesIntIfValueIs1) {
     const char* txt = "no\0";
     wc_writeIntZeroTxt(1, 3, txt);
@@ -120,7 +147,39 @@ TEST(WriteColumns, writeIntZeroTxtIsLeftAligned) {
 }
 
 
+// wc_writeChar
+
+
+TEST(WriteColumns, writeCharIncreasesCursorPositionBy1) {
+    wc_setCursorPosition(6);
+    wc_writeChar(2, "charSet");
+    BYTES_EQUAL(6 + 1, wc_getCursorPosition());
+}
+
+
+TEST(WriteColumns, writeCharWritesASinleCharacterFromACharSet) {
+    const char* charSet = "ABCD\0";
+    wc_writeChar(2, charSet);
+    STRNCMP_EQUAL("C\0", wc_getWriteBuffer(), 2);
+}
+
+
+TEST(WriteColumns, callingWriteCharTwiceWritesTwoConsecutiveCharacters) {
+    const char* charSet = "ABCD\0";
+    wc_writeChar(3, charSet);
+    wc_writeChar(1, charSet);
+    STRNCMP_EQUAL("DB\0", wc_getWriteBuffer(), 3);
+}
+
+
 // wc_writeTxt
+
+
+TEST(WriteColumns, writeTxtIncreasesCursorPosition) {
+    wc_setCursorPosition(6);
+    wc_writeTxt("txt", 5);
+    BYTES_EQUAL(6 + 5, wc_getCursorPosition());
+}
 
 
 TEST(WriteColumns, writeTxtWithLessTextThanSpaceFillsWithSpaces) {
@@ -128,4 +187,3 @@ TEST(WriteColumns, writeTxtWithLessTextThanSpaceFillsWithSpaces) {
     wc_writeTxt(txt, 5);
     STRNCMP_EQUAL("no   \0", wc_getWriteBuffer(), 6);
 }
-

@@ -10,9 +10,10 @@
 
 void wc_initBuffer(const uint8_t size);
 void wc_freeBuffer(void);
-
 char* wc_getWriteBuffer(void);
+
 void wc_setCursorPosition(const uint8_t position);
+uint8_t wc_getCursorPosition(void);
 
 void wc_writeInteger(uint16_t value,
                      const uint8_t numDigits,

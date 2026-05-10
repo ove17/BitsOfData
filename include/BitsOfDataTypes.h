@@ -83,13 +83,10 @@ typedef struct {
 } BDB_columnT;
 
 
-// recordDef (also) determines display format!!
-//	NOTE: so settings can be record(type)s, rather than columns! Fewer exceptions!
 typedef struct {
     uint8_t numColumns;
-//    uint8_t formatString;   // TODO id of (translatable) txt
-                                // AND how does this fit here? or elsewhere?
-    BDB_columnT columns[MAX_NUM_COLUMNS];   // pointer to array of column definitions
+    uint8_t txtFormat;   // id of txt that contains format
+    BDB_columnT columns[MAX_NUM_COLUMNS];
 } BDB_recordT;
 
 
