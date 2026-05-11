@@ -21,80 +21,87 @@ TEST_GROUP(RecordCodec) {
 
 
 TEST(RecordCodec, getRecordSizeOnZeroByteReturns0) {
+    static const BDB_columnT columns[] = {
+        {.maxValue = 0}
+    };
     static const BDB_recordT recordDef = {
         .numColumns = 1,
-        .columns = {
-            {.maxValue = 0}
-        },
+        .columns = columns,
     };
     BYTES_EQUAL(0, rc_getRecordSize(&recordDef));
 }
 
 
 TEST(RecordCodec, getRecordSizeOnOneByteReturns1) {
+    static const BDB_columnT columns[] = {
+        {.maxValue = 255}
+    };
     static const BDB_recordT recordDef = {
         .numColumns = 1,
-        .columns = {
-            {.maxValue = 255}
-        },
+        .columns = columns,
     };
     BYTES_EQUAL(1, rc_getRecordSize(&recordDef));
 }
 
 
 TEST(RecordCodec, getRecordSizeOnTwoBytesReturns2) {
+    static const BDB_columnT columns[] = {
+        {.minValue = 10, .maxValue = 265},
+        {.maxValue = 255}
+    };
     static const BDB_recordT recordDef = {
         .numColumns = 2,
-        .columns = {
-            {.minValue = 10, .maxValue = 265},
-            {.maxValue = 255}
-        },
+        .columns = columns,
     };
     BYTES_EQUAL(2, rc_getRecordSize(&recordDef));
 }
 
 
 TEST(RecordCodec, getRecordSizeOn9bitsReturns2) {
+    static const BDB_columnT columns[] = {
+        {.maxValue = 256}
+    };
     static const BDB_recordT recordDef = {
         .numColumns = 1,
-        .columns = {
-            {.maxValue = 256}
-        },
+        .columns = columns,
     };
     BYTES_EQUAL(2, rc_getRecordSize(&recordDef));
 }
 
 
 TEST(RecordCodec, getRecordSizeOn3plus5bitsReturns1) {
+    static const BDB_columnT columns[] = {
+        {.minValue = 10, .maxValue = 17},
+        {.maxValue = 31}
+    };
     static const BDB_recordT recordDef = {
         .numColumns = 2,
-        .columns = {
-            {.minValue = 10, .maxValue = 17},
-            {.maxValue = 31}
-        },
+        .columns = columns,
     };
     BYTES_EQUAL(1, rc_getRecordSize(&recordDef));
 }
 
 
 TEST(RecordCodec, getRecordSizeOn4plus5bitsReturns2) {
+    static const BDB_columnT columns[] = {
+        {.minValue = 9, .maxValue = 17},
+        {.maxValue = 31}
+    };
     static const BDB_recordT recordDef = {
         .numColumns = 2,
-        .columns = {
-            {.minValue = 9, .maxValue = 17},
-            {.maxValue = 31}
-        },
+        .columns = columns,
     };
     BYTES_EQUAL(2, rc_getRecordSize(&recordDef));
 }
 
 
 TEST(RecordCodec, getRecordSizeOnDecimalRecordWithStepIsReduced) {
+    static const BDB_columnT columns[] = {
+        {.colType = BDB_COLUMN_DECIMAL, .minValue = 5, .maxValue = 1280, .decStep = 5},
+    };
     static const BDB_recordT recordDef = {
         .numColumns = 1,
-        .columns = {
-            {.colType = BDB_COLUMN_DECIMAL, .minValue = 5, .maxValue = 1280, .decStep = 5},
-        },
+        .columns = columns,
     };
     // expected: (1280 - 5)/5 = 255, so 1 byte
     BYTES_EQUAL(1, rc_getRecordSize(&recordDef));
@@ -105,11 +112,12 @@ TEST(RecordCodec, encodeRecordReturnsValueOnRecordWith8bitColumn) {
     uint8_t value = 100;
     const uint16_t recordData[1] = {value,};
     uint8_t rawRecord[1] = {0,};
+    static const BDB_columnT columns[] = {
+        {.maxValue = 255}
+    };
     static const BDB_recordT recordDef = {
         .numColumns = 1,
-        .columns = {
-            {.maxValue = 255}
-        },
+        .columns = columns,
     };
     static const BDB_recordT recordDefs[] = {recordDef};
     BDB_tableT tableDef = {
@@ -126,11 +134,12 @@ TEST(RecordCodec, encoding12bitsThenDecodingReturnsSame12bits) {
     uint16_t value = 2050; // 12 bits
     const uint16_t recordData[1] = {value,};
     uint8_t rawRecord[2] = {0,};
+    static const BDB_columnT columns[] = {
+        {.maxValue = 4000}
+    };
     static const BDB_recordT recordDef = {
         .numColumns = 1,
-        .columns = {
-            {.maxValue = 4000}
-        },
+        .columns = columns,
     };
     static const BDB_recordT recordDefs[] = {recordDef};
     BDB_tableT tableDef = {
@@ -149,16 +158,17 @@ TEST(RecordCodec, encoding12bitsThenDecodingReturnsSame12bits) {
 TEST(RecordCodec, encodingMultipleColumnsThenDecodingReturnsSameColumnValues) {
     const uint16_t recordData[6] = {1, 2345, 9, 123, 4321, 431,};
     uint8_t rawRecord[7] = { 0 };
+    static const BDB_columnT columns[] = {
+        {.maxValue = 2},
+        {.maxValue = 4000},
+        {.maxValue = 19},
+        {.maxValue = 259},
+        {.maxValue = 9999},
+        {.maxValue = 559},
+    };
     static const BDB_recordT recordDef = {
         .numColumns = 6,
-        .columns = {
-            {.maxValue = 2},
-            {.maxValue = 4000},
-            {.maxValue = 19},
-            {.maxValue = 259},
-            {.maxValue = 9999},
-            {.maxValue = 559},
-        },
+        .columns = columns,
     };
     static const BDB_recordT recordDefs[] = {recordDef};
     BDB_tableT tableDef = {
@@ -181,20 +191,22 @@ TEST(RecordCodec, encodingVariableRecordThenDecodingReturnsSame) {
 
     uint8_t rawRecord[4] = {0};
 
+    static const BDB_columnT columns1[] = {
+        {.colType = BDB_COLUMN_RECORD_TYPE, .maxValue = 1},
+        {.maxValue = 123}
+    };
     static const BDB_recordT recordDef1 = {
         .numColumns = 2,
-        .columns = {
-            {.colType = BDB_COLUMN_RECORD_TYPE, .maxValue = 1},
-            {.maxValue = 123}
-        },
+        .columns = columns1,
+    };
+    static const BDB_columnT columns2[] = {
+        {.colType = BDB_COLUMN_RECORD_TYPE, .maxValue = 1},
+        {.maxValue = 4000},
+        {.maxValue = 299}
     };
     static const BDB_recordT recordDef2 = {
         .numColumns = 3,
-        .columns = {
-            {.colType = BDB_COLUMN_RECORD_TYPE, .maxValue = 1},
-            {.maxValue = 4000},
-            {.maxValue = 299}
-        },
+        .columns = columns2,
     };
     static const BDB_recordT recordDefs[] = {recordDef1, recordDef2};
     BDB_tableT tableDef = {
@@ -225,13 +237,14 @@ TEST(RecordCodec, encodeRecordSkipsVirtualColumn) {
     uint8_t rawRecordTarget[3] = {0};
     rawRecordTarget[0] = value1;
     rawRecordTarget[1] = value2;
+    static const BDB_columnT columns[] = {
+        {.maxValue = 255},
+        {.colType = BDB_COLUMN_VIRTUAL},
+        {.maxValue = 255}
+    };
     static const BDB_recordT recordDef = {
         .numColumns = 3,
-        .columns = {
-            {.maxValue = 255},
-            {.colType = BDB_COLUMN_VIRTUAL},
-            {.maxValue = 255}
-        },
+        .columns = columns,
     };
     static const BDB_recordT recordDefs[] = {recordDef};
     BDB_tableT tableDef = {
@@ -252,12 +265,13 @@ TEST(RecordCodec, encodeRecordSkipsVirtualColumn) {
 TEST(RecordCodec, encodingDecimalColumnsThenDecodingReturnsSameValue) {
     const uint16_t recordData[] = {995, 170};
     uint8_t rawRecord[3] = { 0 };
+    static const BDB_columnT columns[] = {
+        {.colType = BDB_COLUMN_DECIMAL, .minValue = 5, .maxValue = 1280, .decStep = 5},
+        {.maxValue = 255},
+    };
     static const BDB_recordT recordDef = {
         .numColumns = 2,
-        .columns = {
-            {.colType = BDB_COLUMN_DECIMAL, .minValue = 5, .maxValue = 1280, .decStep = 5},
-            {.maxValue = 255},
-        },
+        .columns = columns,
     };
     static const BDB_recordT recordDefs[] = {recordDef};
     BDB_tableT tableDef = {

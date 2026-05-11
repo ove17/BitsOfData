@@ -71,7 +71,8 @@ TEST(UseDbase, getNumRealColumnsReturnsNumColumnsWithoutVirtual) {
 
 
 TEST(UseDbase, getNumRealColumnsReturnsNumColumnsWithoutVirtualForVariableRecordType) {
-    BDB_setValue(1, 0, 0, 1); // set to 2nd recordType
+    const uint8_t recordType = 1;
+    BDB_setValue(1, 0, 0, recordType);
     BYTES_EQUAL(3, BDB_getNumRealColumns(1, 0));
 }
 
@@ -119,6 +120,15 @@ TEST(UseDbase, setValueIsReturnedWithGetValue) {
     BYTES_EQUAL(3, BDB_getValue(0, 0, 0));
     BDB_setValue(0, 0, 1, 3456);
     LONGS_EQUAL(3456, BDB_getValue(0, 0, 1));
+}
+
+
+TEST(UseDbase, setValueOnVariableRecDefChangesBuffer) {
+    BDB_insertRecordAfter(1, 0);
+    CHECK_TRUE(BDB_setValue(1, 0, 0, 0)); // set recordType to 0
+    CHECK_TRUE(BDB_setValue(1, 1, 0, 1)); // set recordType to 1
+    CHECK_TRUE(BDB_setValue(1, 0, 1, 4)); // min value is below that of recordType 1
+    LONGS_EQUAL(4, BDB_getValue(1, 0, 1));
 }
 
 
@@ -189,6 +199,15 @@ TEST(UseDbase, changeValueDownBy100IfItIs50AboveMinSucceedsAndSubtrackts50) {
     BDB_setValue(0, 0, 1, 50);
     CHECK_TRUE(BDB_changeValue(0, 0, 1, -100));
     BYTES_EQUAL(0, BDB_getValue(0, 0, 1));
+}
+
+
+TEST(UseDbase, changeValueOnVariableRecDefChangesBuffer) {
+    BDB_insertRecordAfter(1, 0);
+    CHECK_TRUE(BDB_setValue(1, 0, 0, 0)); // set recordType to 0
+    CHECK_TRUE(BDB_setValue(1, 1, 0, 1)); // set recordType to 1
+    CHECK_TRUE(BDB_changeValue(1, 0, 1, 1)); // 150 + 1
+    LONGS_EQUAL(151, BDB_getValue(1, 0, 1));
 }
 
 
@@ -285,7 +304,7 @@ TEST(UseDbase, settingARecordDoesNotStoreIt) {
 
 TEST(UseDbase, storeRecordStoresBuffer) {
     BDB_setValue(0, 0, 0, 6);
-    BDB_storeRecord(0, 0);
+    BDB_syncTable(0);
     BDB_setValue(0, 0, 0, 5);
     BDB_closeDataBase();
     CHECK_TRUE(BDB_openDataBase(&dbaseDef, NULL));
@@ -390,7 +409,7 @@ TEST(UseDbase, setRecordToValidRecordSucceeds) {
     BDB_insertRecordAfter(1, 0);
     uint16_t rec1_0[] = { 0, 123, 75, 60, 500, 1};
     CHECK_TRUE(BDB_setRecord(1, 0, rec1_0));
-    uint16_t rec1_1[] = { 1, 85, 0, };
+    uint16_t rec1_1[] = { 1, 85, 0};
     CHECK_TRUE(BDB_setRecord(1, 1, rec1_1));
     CHECK_UINT16_ARRAY_EQUAL(rec1_1, BDB_getRecord(1, 1), 3);
     CHECK_UINT16_ARRAY_EQUAL(rec1_0, BDB_getRecord(1, 0), 4);

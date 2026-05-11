@@ -45,7 +45,6 @@ uint8_t rc_getMaxRecordSize(const BDB_tableT* tableDef) {
 // returns compressed record size in bytes
 uint8_t rc_getRecordSize(const BDB_recordT* recordDef) {
     assert(recordDef->numColumns > 0);
-    assert(recordDef->numColumns <= MAX_NUM_COLUMNS);
     uint16_t numBits = 0;
     for (uint8_t col = 0; col < recordDef->numColumns; col++) {
         numBits += getNumBitsOfColumn(recordDef, col);
@@ -136,9 +135,4 @@ void rc_decodeRecord(const uint8_t rawRecord[], // input (packed)
         bitsInBuffer -= numBits;
         bitBuffer &= bu_truncateMask(bitsInBuffer); // keep remaining bits
     }
-}
-
-
-bool rc_isVirtualColumn(const BDB_columnT* columnDef) {
-    return columnDef->colType == BDB_COLUMN_VIRTUAL || columnDef->colType == BDB_COLUMN_STRING;
 }

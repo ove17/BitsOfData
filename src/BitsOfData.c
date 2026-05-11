@@ -1,9 +1,11 @@
 /*
  * BitsOfData.c
+ *
  * TODO:
- * refactor: use getColumnDef, getRecordDef everywhere possible
- * look for duplication
- * fix FIXME s
+ * do all tests also work if recId != 0 ?
+ * remove prototype definitions in RecordStore, RecordCodec
+ * document recordStore/recordCodec headers
+ * update README
  */
 
 #include <stdint.h>
@@ -16,9 +18,15 @@
 #include "WriteColumns.h"
 #include "MathUtils.h"
 
-#include <stdio.h>  // FIXME: remove when stable
 #define NO_RECORD_ID 0xFF
 #define INVALID_VALUE 0xFFFF
+
+
+typedef struct {
+    uint8_t tableId;
+    uint8_t recordId;
+    uint8_t columnId;
+} TrcT;
 
 
 typedef struct {
@@ -34,49 +42,79 @@ extern void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef);
 static recordBufferT* RecordBuffers = NULL;
 static uint8_t* RawRecordBuffer = NULL;
 static const BDB_dbaseDefT* DbaseDef = NULL;
-
-static uint8_t (*GetTxtPtr)(const char**, const uint8_t) = NULL;
-
+static BDB_txtHandlerFunction GetTxtPtr = NULL;
 
 
-static const BDB_recordT* getRecordDef(const uint8_t tableId,
-                                       const uint16_t column0value) {
-    const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
-    const uint8_t numRecordDefs = tableDef->numRecordDefs;
-    uint8_t recordType = (uint8_t)((numRecordDefs > 1) ? column0value : 0);
-    return &tableDef->recordDefs[recordType];
-}
 
-
-static const BDB_columnT* getColumnDef(const uint8_t tableId,
-                                       const uint8_t columnId,
-                                       const uint16_t column0value ) {
-    const BDB_recordT* recordDef = getRecordDef(tableId, column0value);
-    return &recordDef->columns[columnId];
-}
-
-
-static const BDB_columnT* getColDefFromRecDef(const BDB_recordT* recordDef,
-                                              const uint8_t columnId) {
-    return &recordDef->columns[columnId];
-}
-
-
-static void storeRecordBuffer(const uint8_t tableId,
-                              const uint8_t recordId) {
+static void storeRecordBuffer(const uint8_t tableId) {
     recordBufferT* recordBuffer = &RecordBuffers[tableId];
+    const uint8_t recordId = recordBuffer->recordId;
     const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
     rc_encodeRecord(recordBuffer->columns, RawRecordBuffer, tableDef);
     rs_setRawRecord(tableId, recordId, RawRecordBuffer);
 }
 
 
-/* Writes RecordBuffer[tableId] to EE, must (only) be called after the last setValue,
- *      changeValue or setRecord call.
- */
-void BDB_storeRecord(const uint8_t tableId,
-                     const uint8_t recordId) {
-    storeRecordBuffer(tableId, recordId);
+void BDB_syncTable(const uint8_t tableId) {
+    storeRecordBuffer(tableId);
+}
+
+
+void BDB_syncDbase(void) {
+    uint8_t numTables = DbaseDef->numTables;
+    for (uint8_t tableId = 0; tableId < numTables; tableId++) {
+        storeRecordBuffer(tableId);
+    }
+}
+
+
+static void writeRecordBufferIfDirty(const uint8_t tableId) {
+    recordBufferT* recordBuffer = &RecordBuffers[tableId];
+    if (recordBuffer->isModified) {
+        storeRecordBuffer(tableId);
+    }
+}
+
+
+static void fillRecordBuffer(const uint8_t tableId,
+                             const uint8_t recordId) {
+    recordBufferT* recordBuffer = &RecordBuffers[tableId];
+    if (recordBuffer->recordId != recordId) {
+        writeRecordBufferIfDirty(tableId);
+        recordBuffer->recordId = recordId;
+        uint8_t* rawRecord = rs_getRawRecord(tableId, recordId);
+        const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
+        rc_decodeRecord(rawRecord, recordBuffer->columns, tableDef);
+        recordBuffer->isModified = false;
+    }
+}
+
+
+static const BDB_recordT* getRecordDefFromBuffer(const uint8_t tableId,
+                                                 const uint8_t recordId) {
+    fillRecordBuffer(tableId, recordId);
+    const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
+    const uint8_t numRecordDefs = tableDef->numRecordDefs;
+    uint8_t recordType = 0;
+    if (numRecordDefs > 1) {
+        recordType = (uint8_t)RecordBuffers[tableId].columns[0];
+    }
+    return &tableDef->recordDefs[recordType];
+}
+
+
+static const BDB_recordT* getRecordDefFromData(const uint8_t tableId,
+                                               const uint16_t* data) {
+    const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
+    const uint8_t numRecordDefs = tableDef->numRecordDefs;
+    uint8_t recordType = (uint8_t)((numRecordDefs > 1) ? (uint8_t)data[0] : 0);
+    return &tableDef->recordDefs[recordType];
+}
+
+
+static const BDB_columnT* getColumnDef(const BDB_recordT* recordDef,
+                                       const uint8_t columnId) {
+    return &recordDef->columns[columnId];
 }
 
 
@@ -94,13 +132,11 @@ static uint8_t getMaxNumColumns(const uint8_t tableId) {
             }
         }
     }
-    //FIXME testing recordCodec requires MAX_NUM_COLUMNS == 6 :
-    //   BUT WE SHOULD: assert(maxNumColumns == MAX_NUM_COLUMNS);
-    // can this be fixed with a macro?
     return maxNumColumns;
 }
 
 
+// returns the (maximum) record (storage) size in bytes
 static uint8_t getMaxRawRecordSize(void) {
     uint8_t maxRawRecordSize = 0;
     const uint8_t numTables = DbaseDef->numTables;
@@ -138,13 +174,20 @@ static void createTable(const uint8_t tableId) {
 }
 
 
+static uint16_t getMaxValue(const BDB_columnT* columnDef) {
+    if (columnDef->colType == BDB_COLUMN_REFERENCE) {
+        return rs_getNumRecords(columnDef->refTable) - 1;
+    } else {
+        return columnDef->maxValue;
+    }
+}
+
+
 static uint16_t getDefaultValue(const BDB_columnT* columnDef) {
     if (rc_isVirtualColumn(columnDef)) {
         return INVALID_VALUE;
     }
-// FIXME: are next two lines duplicates of asserts in assertDbaseDefIsValid() ?
-    assert(columnDef->defaultVal >= columnDef->minValue);
-    assert(columnDef->defaultVal <= columnDef->maxValue); // FIXME: use getMaxValue ??
+    assert(columnDef->defaultVal <= getMaxValue(columnDef));
     return columnDef->defaultVal;
 }
 
@@ -160,7 +203,7 @@ static void setColumnsToDefaultValue(const uint8_t tableId,
         uint16_t defaultValue = getDefaultValue(&columnDef);
         RecordBuffers[tableId].columns[col] = defaultValue;
     }
-    storeRecordBuffer(tableId, recordId);
+    storeRecordBuffer(tableId);
 }
 
 
@@ -182,9 +225,8 @@ static void createFirstRecordInEveryTable(void) {
 }
 
 
-// returns true if a database was found and opened, false if one was created
 bool BDB_openDataBase(const BDB_dbaseDefT* dbaseDef,
-                      uint8_t (*txtHandler)(const char**, const uint8_t)) {
+                      BDB_txtHandlerFunction txtHandler) {
     DbaseDef = dbaseDef;
     GetTxtPtr = txtHandler;
 #ifndef NDEBUG
@@ -222,7 +264,6 @@ static void freeRecordBuffers(void) {
 }
 
 
-// NOTE: avoid opening and closing repeatedly, as it will lead to fragmentation
 void BDB_closeDataBase(void) {
     rs_closeRecordStore();
     freeRecordBuffers();
@@ -243,10 +284,10 @@ static bool forEachReference(const uint8_t refTableId,
                              bool (*operation)(uint8_t, uint8_t, uint8_t, uint8_t)) {
     const uint8_t numTables = DbaseDef->numTables;
 
-    for (uint8_t tab = 0; tab < numTables; tab++) {
-        const BDB_tableT* tableDef = &DbaseDef->tables[tab];
+    for (uint8_t tableId = 0; tableId < numTables; tableId++) {
+        const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
         const uint8_t numRecordDefs = tableDef->numRecordDefs;
-        const uint8_t numRecords = rs_getNumRecords(tab);
+        const uint8_t numRecords = rs_getNumRecords(tableId);
 
         const bool hasVariableRecordDef = (numRecordDefs > 1);
 
@@ -260,12 +301,13 @@ static bool forEachReference(const uint8_t refTableId,
                 if (colType != BDB_COLUMN_REFERENCE || columnDef->refTable != refTableId) {
                     continue;
                 }
+                // a column was found that references the right table (refTableId)
                 for (uint8_t rec = 0; rec < numRecords; rec++) {
-                    if (hasVariableRecordDef && BDB_getValue(tab, rec, 0) != recDef) {
+                    if (hasVariableRecordDef && BDB_getValue(tableId, rec, 0) != recDef) {
                         continue;
                     }
-                    // for each record that references [refTableId]:
-                    if (operation(tab, rec, col, refRecordId)) {
+                    // a record was found that has the right recordType
+                    if (operation(tableId, rec, col, refRecordId)) {
                         return true;
                     }
                 }
@@ -333,7 +375,6 @@ bool BDB_canRecordBeDeleted(const uint8_t tableId,
 }
 
 
-// returns false if record could not be deleted
 bool BDB_deleteRecord(const uint8_t tableId,
                       const uint8_t recordId) {
     if (BDB_canRecordBeDeleted(tableId, recordId)) {
@@ -351,7 +392,6 @@ bool BDB_canRecordBeAdded(const int8_t tableId) {
 }
 
 
-// returns true if record was inserted, false if max. no of records was reached
 bool BDB_insertRecordAfter(const int8_t tableId,
                            const uint8_t recordId) {
     uint8_t newRecordId = rs_insertRecordAfter(tableId, recordId);
@@ -372,22 +412,13 @@ static bool validateDecimalValue(const BDB_columnT* columnDef,
 }
 
 
-static uint16_t getMaxValue(const BDB_columnT* columnDef) {
-    if (columnDef->colType == BDB_COLUMN_REFERENCE) {
-        return rs_getNumRecords(columnDef->refTable) - 1;
-    } else {
-        return columnDef->maxValue;
-    }
-}
-
-
 static bool validateRecord(const uint8_t tableId,
-                           const uint8_t recordId,
                            const uint16_t* data) {
-    const uint16_t column0value = data[0];
-    const uint8_t numRealColumns = BDB_getNumRealColumns(tableId, recordId);
-    for (uint8_t col = 0; col < numRealColumns; col++) {
-        const BDB_columnT* columnDef = getColumnDef(tableId, col, column0value);
+    const BDB_recordT* recordDef = getRecordDefFromData(tableId, data);
+    const uint8_t numColumns = recordDef->numColumns;
+    for (uint8_t col = 0; col < numColumns; col++) {
+        const BDB_columnT* columnDef = getColumnDef(recordDef, col);
+        if (rc_isVirtualColumn(columnDef)) continue;
         if (       data[col] < columnDef->minValue
                 || data[col] > getMaxValue(columnDef)
                 || !validateDecimalValue(columnDef, data[col])) {
@@ -398,32 +429,26 @@ static bool validateRecord(const uint8_t tableId,
 }
 
 
-static void writeRecordBufferIfDirty(const uint8_t tableId) {
-    recordBufferT* recordBuffer = &RecordBuffers[tableId];
-    if (recordBuffer->isModified) {
-        storeRecordBuffer(tableId, recordBuffer->recordId);
-    }
-}
-
-
 static void copyDataToRecordBuffer(const uint8_t tableId,
                                    const uint8_t recordId,
                                    const uint16_t* data) {
     recordBufferT* recordBuffer = &RecordBuffers[tableId];
-    const uint8_t numRealColumns = BDB_getNumRealColumns(tableId, recordId);
-    for (uint8_t c = 0; c < numRealColumns; c++) {
-        recordBuffer->columns[c] = data[c];
+    const BDB_recordT* recordDef = getRecordDefFromData(tableId, data);
+    const uint8_t numColumns = recordDef->numColumns;
+    for (uint8_t col = 0; col < numColumns; col++) {
+        const BDB_columnT* columnDef = getColumnDef(recordDef, col);
+        if (rc_isVirtualColumn(columnDef)) continue;
+        recordBuffer->columns[col] = data[col];
     }
     recordBuffer->isModified = true;
     recordBuffer->recordId = recordId;
 }
 
 
-// NOTE: data must contain the number of REAL columns
 bool BDB_setRecord(const uint8_t tableId,
                    const uint8_t recordId,
                    const uint16_t* data) {
-    if (!validateRecord(tableId, recordId, data)) {
+    if (!validateRecord(tableId, data)) {
         return false;
     }
     writeRecordBufferIfDirty(tableId);
@@ -432,22 +457,7 @@ bool BDB_setRecord(const uint8_t tableId,
 }
 
 
-static void fillRecordBuffer(const uint8_t tableId,
-                             const uint8_t recordId) {
-    recordBufferT* recordBuffer = &RecordBuffers[tableId];
-    if (recordBuffer->recordId != recordId) {
-        writeRecordBufferIfDirty(tableId);
-        recordBuffer->recordId = recordId;
-        uint8_t* rawRecord = rs_getRawRecord(tableId, recordId);
-        const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
-        rc_decodeRecord(rawRecord, recordBuffer->columns, tableDef);
-        recordBuffer->isModified = false;
-    }
-}
-
-
-// NOTE: output will (only) contain the number of REAL columns
-uint16_t* BDB_getRecord(const uint8_t tableId,
+const uint16_t* BDB_getRecord(const uint8_t tableId,
                         const uint8_t recordId) {
     fillRecordBuffer(tableId, recordId);
     return RecordBuffers[tableId].columns;
@@ -457,14 +467,12 @@ uint16_t* BDB_getRecord(const uint8_t tableId,
 // column functions:
 
 
-// ignores virtual columns
 uint8_t BDB_getNumRealColumns(const uint8_t tableId,
                               const uint8_t recordId) {
-    const uint16_t column0value = RecordBuffers[tableId].columns[0];
-    const BDB_recordT* recordDef = getRecordDef(tableId, column0value);
+    const BDB_recordT* recordDef = getRecordDefFromBuffer(tableId, recordId);
     const uint8_t numColumns = recordDef->numColumns;
     for (uint8_t col = 0; col < numColumns; col++) {
-        const BDB_columnT* columnDef = getColDefFromRecDef(recordDef, col);
+        const BDB_columnT* columnDef = getColumnDef(recordDef, col);
         if (rc_isVirtualColumn(columnDef)) {
             return col;
         }
@@ -473,28 +481,41 @@ uint8_t BDB_getNumRealColumns(const uint8_t tableId,
 }
 
 
+/*
+ * NOTE: the reference column is in the same table,record as the virtual
+ *  column. This is why getColumnDef is called twice with the same recordDef,
+ *  just with a different column. This is also why the .recordId output comes
+ *  straight from RecordBuffers[tableId].columns[refColumId]
+ */
+static TrcT resolveVirtualColumn(const uint8_t tableId,
+                                 const uint8_t recordId,
+                                 const uint8_t columnId) {
+    const BDB_recordT* recordDef = getRecordDefFromBuffer(tableId, recordId);
+    const BDB_columnT* columnDef = getColumnDef(recordDef, columnId);
+    uint8_t refColumnId = columnDef->virtRecordCol; // columnId of the REFERENCE COLUMN
+    const BDB_columnT* refColumnDef = getColumnDef(recordDef, refColumnId);
+    return (TrcT) {
+        .tableId  = refColumnDef->refTable,
+        .recordId = (uint8_t)RecordBuffers[tableId].columns[refColumnId],
+        .columnId = columnDef->virtValueCol,
+    };
+}
+
+
 uint16_t BDB_getValue(const uint8_t tableId,
                       const uint8_t recordId,
                       const uint8_t columnId) {
-    fillRecordBuffer(tableId, recordId);
-    const uint16_t column0value = RecordBuffers[tableId].columns[0];
-    const BDB_recordT* recordDef = getRecordDef(tableId, column0value);
-    const BDB_columnT* columnDef = getColDefFromRecDef(recordDef, columnId);
-    uint16_t returnValue = 0;
+    const BDB_recordT* recordDef = getRecordDefFromBuffer(tableId, recordId);
+    const BDB_columnT* columnDef = getColumnDef(recordDef, columnId);
     if (columnDef->colType == BDB_COLUMN_VIRTUAL) {
-// FIXME DRY with BDB_writeValue
-        uint8_t refColumnId = columnDef->virtRecordCol;
-        const BDB_columnT* refColumnDef = &recordDef->columns[refColumnId]; // REF in the same table
-        uint8_t refTableId = refColumnDef->refTable;
-        uint8_t virtRecordId = (uint8_t)(RecordBuffers[tableId].columns[refColumnId]);
-        uint8_t virtColumnId = columnDef->virtValueCol;
-        returnValue = BDB_getValue(refTableId, virtRecordId, virtColumnId);
+        TrcT target = resolveVirtualColumn(tableId, recordId, columnId);
+        return BDB_getValue(target.tableId,
+                            target.recordId,
+                            target.columnId);
     } else if (columnDef->colType == BDB_COLUMN_STRING) {
-        returnValue =  INVALID_VALUE;
-    } else {
-        returnValue = RecordBuffers[tableId].columns[columnId];
+        return INVALID_VALUE;
     }
-    return returnValue;
+    return RecordBuffers[tableId].columns[columnId];
 }
 
 
@@ -524,15 +545,14 @@ bool BDB_setValue (const uint8_t tableId,
                    const uint8_t recordId,
                    const uint8_t columnId,
                    const uint16_t value) {
-    const uint16_t column0value = RecordBuffers[tableId].columns[0];
-    const BDB_columnT* columnDef = getColumnDef(tableId, columnId, column0value);
+    const BDB_recordT* recordDef = getRecordDefFromBuffer(tableId, recordId);
+    const BDB_columnT* columnDef = getColumnDef(recordDef, columnId);
     if (       value < columnDef->minValue
             || value > getMaxValue(columnDef)
             || rc_isVirtualColumn(columnDef)
             || !validateDecimalValue(columnDef, value)) {
         return false;
     }
-    fillRecordBuffer(tableId, recordId);
     setValue(tableId, recordId, columnId, value);
     return true;
 }
@@ -542,16 +562,18 @@ bool BDB_changeValue(const uint8_t tableId,
                      const uint8_t recordId,
                      const uint8_t columnId,
                      int16_t delta) {
-    const uint16_t column0value = RecordBuffers[tableId].columns[0];
-    const BDB_columnT* columnDef = getColumnDef(tableId, columnId, column0value);
+    const BDB_recordT* recordDef = getRecordDefFromBuffer(tableId, recordId);
+    const BDB_columnT* columnDef = getColumnDef(recordDef, columnId);
     if (rc_isVirtualColumn(columnDef)) {
         return false;
     }
     if (columnDef->colType == BDB_COLUMN_DECIMAL) {
         delta *= columnDef->decStep;
     }
-    int16_t value = BDB_getValue(tableId, recordId, columnId); // also fills RecordBuffer
-    int16_t newValue = mu_limitValue(columnDef->minValue, value + delta, getMaxValue(columnDef));
+    int16_t value = BDB_getValue(tableId, recordId, columnId);
+    int16_t newValue = mu_limitValue(columnDef->minValue,
+                                     value + delta,
+                                     getMaxValue(columnDef));
     if (newValue == value) {
         return false;
     }
@@ -589,8 +611,8 @@ static void writeValue(const uint8_t tableId,
                        const uint8_t recordId,
                        const uint8_t columnId) {
     const uint16_t value = BDB_getValue(tableId, recordId, columnId);
-    const uint16_t column0value = RecordBuffers[tableId].columns[0];
-    const BDB_columnT* columnDef = getColumnDef(tableId, columnId, column0value);
+    const BDB_recordT* recordDef = getRecordDefFromBuffer(tableId, recordId);
+    const BDB_columnT* columnDef = getColumnDef(recordDef, columnId);
     switch(columnDef->colType) {
         case BDB_COLUMN_INTEGER : {
             const uint16_t maxValue = columnDef->maxValue;
@@ -637,14 +659,10 @@ static void writeValue(const uint8_t tableId,
             break;
         }
         case BDB_COLUMN_VIRTUAL : {
-            const BDB_recordT* recordDef = getRecordDef(tableId, column0value);
-// FIXME DRY with BDB_getValue
-            uint8_t refColumnId = columnDef->virtRecordCol;
-            const BDB_columnT* refColumnDef = getColDefFromRecDef(recordDef, refColumnId);
-            uint8_t refTableId = refColumnDef->refTable;
-            uint8_t virtRecordId = (uint8_t)(RecordBuffers[tableId].columns[refColumnId]);
-            uint8_t virtColumnId = columnDef->virtValueCol;
-            writeValue(refTableId, virtRecordId, virtColumnId);
+            TrcT target = resolveVirtualColumn(tableId, recordId, columnId);
+            writeValue(target.tableId,
+                       target.recordId,
+                       target.columnId);
             break;
         }
         default :
@@ -667,7 +685,8 @@ uint8_t BDB_writeValue(const uint8_t tableId,
 // writes record to writeBuffert using record format
 uint8_t BDB_writeRecord(const uint8_t tableId,
                         const uint8_t recordId) {
-    const BDB_recordT* recordDef = getRecordDef(tableId, recordId);
+    assert(GetTxtPtr != NULL); // relies on static text
+    const BDB_recordT* recordDef = getRecordDefFromBuffer(tableId, recordId);
     const char* txtFormat = NULL;
     const uint8_t len = GetTxtPtr(&txtFormat, recordDef->txtFormat);
     wc_setCursorPosition(0);

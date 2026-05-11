@@ -24,8 +24,15 @@ The following column types have been implemented:
 
 The database schema is defined by the caller, using the prototypes in BitsOfDataTypes.h, see TestBistsOfData.cpp for usage examples.
 
-## Language
+## Prerequisites
+The BDB library is low level and has very few prerequisites.
+There is only one external dependency:
+- The functions declarad in EeHw.h are platform dependent and must be defined by the user.
+The only other requirements are:
+- A BDB_dbaseDefT struct has to be populated with the desired database schema.
+- AtxtHandler callback function has to be provided for supplying static text.
 
+## Language
 The embedded code is written in C and all test code is in C++, using CppuTest
 
 ## Testing
