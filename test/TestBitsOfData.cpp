@@ -1,4 +1,8 @@
-// TestBitsOfData.cpp
+/* TestBitsOfData.cpp
+ *
+ * TODO:
+ *  check if (all) tests also work if recId != 0 ?
+ */
 
 #include "CppUTest/TestHarness.h"
 #include "cpputestUtils.h"

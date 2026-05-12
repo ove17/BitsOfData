@@ -358,12 +358,6 @@ TEST(Records, insertRecordAfter_On2ndRecord_InsertsRecordIndex) {
 // DELETE RECORD
 
 
-TEST(Records, deleteRecordOnTheLastRecordReturnsTrue) {
-    createRecords(0, 5);
-    CHECK_TRUE(rs_deleteRecord(0, 4));
-}
-
-
 TEST(Records, deleteRecordOnTheLastRecordReducesNumRecordsBy1) {
     createRecords(0, 5);
     rs_deleteRecord(0, 4);
@@ -376,7 +370,7 @@ TEST(Records, deleteRecordOnTheMiddleRecordShiftsLastRecord) {
     uint8_t rec[3] = {1,0,0};   rs_setRawRecord(0, 0, rec);
     rec[0] = 2;                 rs_setRawRecord(0, 1, rec);
     rec[0] = 3;                 rs_setRawRecord(0, 2, rec);
-    CHECK_TRUE(rs_deleteRecord(0, 1));
+    rs_deleteRecord(0, 1);
     BYTES_EQUAL(1, *rs_getRawRecord(0, 0));
     BYTES_EQUAL(3, *rs_getRawRecord(0, 1));
 }
@@ -390,7 +384,7 @@ TEST(Records, deleteRecordOnFullRecordIndexShiftsRecordIndex) {
         rec[0] = i+1;
         rs_setRawRecord(0, i, rec);
     }
-    CHECK_TRUE(rs_deleteRecord(0, 5));
+    rs_deleteRecord(0, 5);
     BYTES_EQUAL( 1, *rs_getRawRecord(0, 0));
     BYTES_EQUAL( 5, *rs_getRawRecord(0, 4));
     BYTES_EQUAL( 7, *rs_getRawRecord(0, 5));
@@ -406,7 +400,7 @@ TEST(Records, deleteRecordOnTheFirstRecordShiftsAllRecords) {
         rec[0] = i+1;
         rs_setRawRecord(0, i, rec);
     }
-    CHECK_TRUE(rs_deleteRecord(0, 0));
+    rs_deleteRecord(0, 0);
     BYTES_EQUAL( 2, *rs_getRawRecord(0, 0));
     BYTES_EQUAL( 3, *rs_getRawRecord(0, 1));
     BYTES_EQUAL( 9, *rs_getRawRecord(0, 7));
@@ -416,9 +410,9 @@ TEST(Records, deleteRecordOnTheFirstRecordShiftsAllRecords) {
 
 TEST(Records, deleteRecordIsPersistentOnReboot) {
     createRecords(0, maxNumRecords);
-    CHECK_TRUE(rs_deleteRecord(0, 9));
-    CHECK_TRUE(rs_deleteRecord(0, 3));
-    CHECK_TRUE(rs_deleteRecord(0, 0));
+    rs_deleteRecord(0, 9);
+    rs_deleteRecord(0, 3);
+    rs_deleteRecord(0, 0);
     BYTES_EQUAL(7, rs_getNumRecords(0));
     reboot();
     BYTES_EQUAL(7, rs_getNumRecords(0));

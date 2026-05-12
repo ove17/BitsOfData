@@ -12,14 +12,9 @@ static uint8_t CursorPosition = 0;
 
 
 static void increaseCursorPosition(void) {
+    assert(CursorPosition < Size);
     CursorPosition++;
-    if (CursorPosition >= Size) {
-        CursorPosition = 0;
-    }
 }
-
-
-// api:
 
 
 void wc_initBuffer(const uint8_t size) {
@@ -115,16 +110,7 @@ void wc_writeIntZeroTxt(uint16_t value,
         wc_writeTxt(txt, numDigits);
         return;
     }
-    wc_setCursorPosition(CursorPosition + numDigits);
-    for (uint8_t i = CursorPosition; i > CursorPosition - numDigits; i--) {
-        if (value > 0) {
-            const uint8_t digit = (uint8_t)(value % 10);
-            StringBuffer[i - 1] = '0' + digit;
-        } else {
-            StringBuffer[i - 1] = ' ';
-        }
-        value /= 10;
-    }
+    wc_writeInteger(value, numDigits, false);
 }
 
 

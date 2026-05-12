@@ -133,7 +133,6 @@ static void assertTxtListColumnIsValid(const BDB_columnT* columnDef) {
     assert(columnDef->maxValue > 0);
     assert(columnDef->defaultVal <= columnDef->maxValue);
     assert(columnDef->txtList != NULL);
-    // NOTE: assertion GetTxtPtr != NULL must be in BitsOfData.c
 }
 
 
@@ -145,6 +144,7 @@ void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef) {
         for (RecDefId = 0; RecDefId < numRecDefs; RecDefId++) {
             const BDB_recordT* recordDef = &tableDef->recordDefs[RecDefId];
             const uint8_t numColumns = recordDef->numColumns;
+            assert(numColumns > 0);
             bool virtualColumnPresent = false;
             for (Col = 0; Col < numColumns; Col++) {
                 const BDB_columnT* columnDef = &recordDef->columns[Col];

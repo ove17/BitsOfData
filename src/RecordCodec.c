@@ -4,7 +4,6 @@
  * Space for the output arrays must be allocated by the caller
  */
 
-#include <assert.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include "BitUtils.h"
@@ -23,11 +22,6 @@ static uint8_t getNumBitsOfColumn(const BDB_recordT* recordDef,
 }
 
 
-// api:
-
-
-// returns the packed size of a record in bytes
-// if it has a variable record definition: the biggest size is returned
 uint8_t rc_getMaxRecordSize(const BDB_tableT* tableDef) {
     uint8_t numRecordDefs = tableDef->numRecordDefs;
     uint8_t maxRecordSize = 0;
@@ -42,9 +36,7 @@ uint8_t rc_getMaxRecordSize(const BDB_tableT* tableDef) {
 }
 
 
-// returns compressed record size in bytes
 uint8_t rc_getRecordSize(const BDB_recordT* recordDef) {
-    assert(recordDef->numColumns > 0);
     uint16_t numBits = 0;
     for (uint8_t col = 0; col < recordDef->numColumns; col++) {
         numBits += getNumBitsOfColumn(recordDef, col);

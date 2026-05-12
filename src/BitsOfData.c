@@ -1,11 +1,5 @@
 /*
  * BitsOfData.c
- *
- * TODO:
- * do all tests also work if recId != 0 ?
- * remove prototype definitions in RecordStore, RecordCodec
- * document recordStore/recordCodec headers
- * update README
  */
 
 #include <stdint.h>
@@ -82,7 +76,7 @@ static void fillRecordBuffer(const uint8_t tableId,
     if (recordBuffer->recordId != recordId) {
         writeRecordBufferIfDirty(tableId);
         recordBuffer->recordId = recordId;
-        uint8_t* rawRecord = rs_getRawRecord(tableId, recordId);
+        const uint8_t* rawRecord = rs_getRawRecord(tableId, recordId);
         const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
         rc_decodeRecord(rawRecord, recordBuffer->columns, tableDef);
         recordBuffer->isModified = false;
