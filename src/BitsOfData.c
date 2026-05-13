@@ -4,6 +4,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdlib.h>
 #include <assert.h>
 #include "BitsOfData.h"
 #include "BitsOfDataTypes.h"
@@ -148,23 +150,26 @@ static uint8_t getMaxRawRecordSize(void) {
 static void allocateRecordBuffers(void) {
     uint8_t numTables = DbaseDef->numTables;
     RecordBuffers = calloc(numTables, sizeof(recordBufferT));
+    assert(RecordBuffers != NULL);
     for (uint8_t table = 0; table < numTables; table++) {
         uint8_t numColumns = getMaxNumColumns(table);
         recordBufferT* recordBuffer = &RecordBuffers[table];
         recordBuffer->recordId = NO_RECORD_ID;
         recordBuffer->isModified = false;
         recordBuffer->columns = calloc(numColumns, sizeof(uint16_t));
+        assert(recordBuffer->columns != NULL);
     }
     uint8_t maxRawRecordSize = getMaxRawRecordSize();
     RawRecordBuffer = calloc(maxRawRecordSize, sizeof(uint8_t));
+    assert(RawRecordBuffer != NULL);
 }
 
 
 static void createTable(const uint8_t tableId) {
     const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
-    const uint8_t numRecords = tableDef->maxNumRecords;
+    const uint8_t maxNumRecords = tableDef->maxNumRecords;
     const uint8_t maxRecordSize = rc_getMaxRecordSize(tableDef);
-    rs_createTable(numRecords, maxRecordSize);
+    rs_createTable(maxNumRecords, maxRecordSize);
 }
 
 
@@ -273,9 +278,15 @@ uint8_t BDB_getNumRecords(const uint8_t tableId) {
 }
 
 
+typedef bool (*operatorFunction)(const uint8_t tableId,
+                                 const uint8_t recordId,
+                                 const uint8_t columnId,
+                                 const uint8_t refRecordId);
+
+
 static bool forEachReference(const uint8_t refTableId,
                              const uint8_t refRecordId,
-                             bool (*operation)(uint8_t, uint8_t, uint8_t, uint8_t)) {
+                             operatorFunction operation) {
     const uint8_t numTables = DbaseDef->numTables;
 
     for (uint8_t tableId = 0; tableId < numTables; tableId++) {

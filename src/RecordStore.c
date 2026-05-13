@@ -34,6 +34,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdlib.h>
 #include <assert.h>
 #include "RecordStore.h"
 #include "EeHw.h"
@@ -76,31 +78,31 @@ static tableDescriptorT* TableCatalog = NULL;
 
 
 static uint8_t getRecordIndex(const tableDescriptorT* tableRow,
-                              const uint8_t record) {
-    eeAddress_t eeAddress = tableRow->recordIndexAddress + record;
+                              const uint8_t recordId) {
+    eeAddress_t eeAddress = tableRow->recordIndexAddress + recordId;
     return eeReadUint8(eeAddress);
 }
 
 
 static void setRecordIndex(const tableDescriptorT* tableRow,
-                           const uint8_t record,
+                           const uint8_t recordId,
                            const uint8_t indexValue) {
-        eeAddress_t eeAddress = tableRow->recordIndexAddress + record;
+        eeAddress_t eeAddress = tableRow->recordIndexAddress + recordId;
         eeWriteUint8(eeAddress, indexValue);
 }
 
 
-static bool recordIndexIsNotUsed(const tableDescriptorT* tableRow,
-                                 const uint8_t record) {
-    eeAddress_t eeAddress = tableRow->recordIndexAddress + record;
+static bool recordIndexAddress(const tableDescriptorT* tableRow,
+                                 const uint8_t recordId) {
+    eeAddress_t eeAddress = tableRow->recordIndexAddress + recordId;
     return eeReadUint8(eeAddress) == NO_RECORD_INDEX;
 }
 
 
 static uint8_t getNumRecordsFromIndex(const tableDescriptorT* tableRow) {
-    for (uint8_t record = 0; record < tableRow->maxNumRecords; record++) {
-        if (recordIndexIsNotUsed(tableRow, record)) {
-            return record;
+    for (uint8_t recordId = 0; recordId < tableRow->maxNumRecords; recordId++) {
+        if (recordIndexAddress(tableRow, recordId)) {
+            return recordId;
         }
     }
     return tableRow->maxNumRecords;
@@ -108,25 +110,25 @@ static uint8_t getNumRecordsFromIndex(const tableDescriptorT* tableRow) {
 
 
 static void markRecordInUse(const tableDescriptorT* tableRow,
-                            const uint8_t record) {
-    uint8_t byteIndex = bu_getByteIndex(record);
-    uint8_t bitMask   = bu_getSingleBitMask(record);
+                            const uint8_t recordId) {
+    uint8_t byteIndex = bu_getByteIndex(recordId);
+    uint8_t bitMask   = bu_getSingleBitMask(recordId);
     tableRow->recordInUseBitmap[byteIndex] |= bitMask;
 }
 
 
 static void markRecordFree(const tableDescriptorT* tableRow,
-                           const uint8_t record) {
-    uint8_t byteIndex = bu_getByteIndex(record);
-    uint8_t bitMask   = bu_getSingleBitMask(record);
+                           const uint8_t recordId) {
+    uint8_t byteIndex = bu_getByteIndex(recordId);
+    uint8_t bitMask   = bu_getSingleBitMask(recordId);
     tableRow->recordInUseBitmap[byteIndex] &= ~bitMask;
 }
 
 
 static bool recordIsFree(const tableDescriptorT* tableRow,
-                         const uint8_t record) {
-    uint8_t byteIndex = bu_getByteIndex(record);
-    uint8_t bitMask   = bu_getSingleBitMask(record);
+                         const uint8_t recordId) {
+    uint8_t byteIndex = bu_getByteIndex(recordId);
+    uint8_t bitMask   = bu_getSingleBitMask(recordId);
     return (tableRow->recordInUseBitmap[byteIndex] & bitMask) == 0;
 }
 
@@ -148,15 +150,16 @@ static void assertTableExists(const uint8_t tableId) {
 
 
 static void assertRecordExists(const uint8_t tableId,
-                               const uint8_t record) {
+                               const uint8_t recordId) {
     assertTableExists(tableId);
-    assert(record < TableCatalog[tableId].numRecords);
+    assert(recordId < TableCatalog[tableId].numRecords);
 }
 
 
 // NOTE: no error checking, system must have plenty of RAM
 static void allocateTableCatalog(void) {
     TableCatalog = calloc(NumTables * TABLE_CATALOG_ROW_SIZE, sizeof(tableDescriptorT));
+    assert(TableCatalog != NULL);
 }
 
 
@@ -179,14 +182,14 @@ static bool isTableSeparatorByte(const eeAddress_t eeAddress) {
 static void loadTableCatalog(void) {
     if (loadNumTables() != NumTables) return;
     eeAddress_t address = ADDR_TABLE_CATALOG;
-    tableDescriptorT* tableIdRow;
+    tableDescriptorT* tableRow;
     for (uint8_t tableId = 0; tableId < NumTables; tableId++) {
-        tableIdRow = &TableCatalog[tableId];
-        tableIdRow->recordIndexAddress = eeReadUint16(address + RECORD_INDEX_OFFSET);
-        tableIdRow->recordDataAddress  = eeReadUint16(address + RECORD_DATA_OFFSET);
-        tableIdRow->recordSize         = eeReadUint8( address + RECORD_SIZE_OFFSET);
-        tableIdRow->maxNumRecords      = eeReadUint8( address + MAX_NUM_RECORDS_OFFSET);
-        tableIdRow->numRecords         = getNumRecordsFromIndex(tableIdRow);
+        tableRow = &TableCatalog[tableId];
+        tableRow->recordIndexAddress = eeReadUint16(address + RECORD_INDEX_OFFSET);
+        tableRow->recordDataAddress  = eeReadUint16(address + RECORD_DATA_OFFSET);
+        tableRow->recordSize         = eeReadUint8( address + RECORD_SIZE_OFFSET);
+        tableRow->maxNumRecords      = eeReadUint8( address + MAX_NUM_RECORDS_OFFSET);
+        tableRow->numRecords         = getNumRecordsFromIndex(tableRow);
         address += TABLE_CATALOG_ROW_SIZE;
     }
 }
@@ -194,32 +197,34 @@ static void loadTableCatalog(void) {
 
 // NOTE: no error checking, system must have plenty of RAM
 static void allocateRecordDataBuffers(void) {
-    tableDescriptorT* tableIdRow;
+    tableDescriptorT* tableRow;
     for (uint8_t tableId = 0; tableId < NumTables; tableId++) {
-        tableIdRow = &TableCatalog[tableId];
-        tableIdRow->recordDataBuffer = calloc(tableIdRow->recordSize, sizeof(uint8_t));
+        tableRow = &TableCatalog[tableId];
+        tableRow->recordDataBuffer = calloc(tableRow->recordSize, sizeof(uint8_t));
+        assert(tableRow->recordDataBuffer != NULL);
     }
 }
 
 
 // NOTE: no error checking, system must have plenty of RAM
 static void allocateRecordInUseBitmap(void) {
-    tableDescriptorT* tableIdRow;
+    tableDescriptorT* tableRow;
     for (uint8_t tableId = 0; tableId < NumTables; tableId++) {
-        tableIdRow = &TableCatalog[tableId];
-        uint8_t bitmapSize = bu_getNumBytes(tableIdRow->maxNumRecords);
-        tableIdRow->recordInUseBitmap = calloc(bitmapSize, sizeof(uint8_t));
+        tableRow = &TableCatalog[tableId];
+        uint8_t bitmapSize = bu_getNumBytes(tableRow->maxNumRecords);
+        tableRow->recordInUseBitmap = calloc(bitmapSize, sizeof(uint8_t));
+        assert(tableRow->recordInUseBitmap);
     }
 }
 
 
 static void generateRecordInUseBitmap(void) {
-    tableDescriptorT* tableIdRow;
+    tableDescriptorT* tableRow;
     for (uint8_t tableId = 0; tableId < NumTables; tableId++) {
-        tableIdRow = &TableCatalog[tableId];
-        for (uint8_t record = 0; record < tableIdRow->numRecords; record++) {
-            uint8_t offset = getRecordIndex(tableIdRow, record);
-            markRecordInUse(tableIdRow, offset);
+        tableRow = &TableCatalog[tableId];
+        for (uint8_t recordId = 0; recordId < tableRow->numRecords; recordId++) {
+            uint8_t offset = getRecordIndex(tableRow, recordId);
+            markRecordInUse(tableRow, offset);
         }
     }
 }
@@ -258,23 +263,23 @@ static void generateRecordInUseBitmap(void) {
 static bool isTableCatalogValid(void) {
     if (loadNumTables() != NumTables) return false;
     eeAddress_t address = ADDR_TABLE_CATALOG + NumTables * TABLE_CATALOG_ROW_SIZE + 1;
-    tableDescriptorT* tableIdRow;
+    tableDescriptorT* tableRow;
     for (uint8_t tableId = 0; tableId < NumTables; tableId++) {
-        tableIdRow = &TableCatalog[tableId];
+        tableRow = &TableCatalog[tableId];
 
         // check recordIndex start address:
-        if (tableIdRow->recordIndexAddress != address) return false;
+        if (tableRow->recordIndexAddress != address) return false;
         // check recordIndex start byte:
         if (!isTableSeparatorByte(address-1)) return false;
 
-        address += tableIdRow->maxNumRecords + 1;
+        address += tableRow->maxNumRecords + 1;
 
         // check recordData start address:
-        if ( tableIdRow->recordDataAddress != address) return false;
+        if ( tableRow->recordDataAddress != address) return false;
         // check recordData start byte:
         if (!isTableSeparatorByte(address - 1)) return false;
 
-        address += getDataAreaSize(tableIdRow) + 1;
+        address += getDataAreaSize(tableRow) + 1;
     }
     // check last recordData closing byte:
     return isTableSeparatorByte(address - 1);
@@ -330,7 +335,7 @@ static void createTable(const uint8_t tableId,
                         const uint8_t recordSize) {
     assertTableExists(tableId);
     eeAddress_t recordIndexAddress;
-    tableDescriptorT* tableIdRow = &TableCatalog[tableId];
+    tableDescriptorT* tableRow = &TableCatalog[tableId];
     if (tableId > 0) {
         tableDescriptorT* previousRow = &TableCatalog[tableId-1];
         recordIndexAddress = previousRow->recordDataAddress
@@ -342,11 +347,11 @@ static void createTable(const uint8_t tableId,
     eeAddress_t endByteAddress = recordDataAddress
                                  + (uint16_t)(recordSize * maxNumRecords);
     assertEeAddressExists(endByteAddress); // NOTE: use disableAssert() for testing end byte algorthm
-    tableIdRow->recordIndexAddress = recordIndexAddress;
-    tableIdRow->recordDataAddress = recordDataAddress;
-    tableIdRow->recordSize = recordSize;
-    tableIdRow->maxNumRecords = maxNumRecords;
-    tableIdRow->numRecords = 0;
+    tableRow->recordIndexAddress = recordIndexAddress;
+    tableRow->recordDataAddress = recordDataAddress;
+    tableRow->recordSize = recordSize;
+    tableRow->maxNumRecords = maxNumRecords;
+    tableRow->numRecords = 0;
 }
 
 
@@ -368,24 +373,24 @@ uint8_t rs_createTable(const uint8_t maxNumRecords,
 static void storeTableCatalog(void) {
     storeNumTables(NumTables);
     eeAddress_t address = ADDR_TABLE_CATALOG;
-    tableDescriptorT* tableIdRow = NULL;
+    tableDescriptorT* tableRow = NULL;
     for (uint8_t tableId = 0; tableId < NumTables; tableId++) {
-        tableIdRow = &TableCatalog[tableId];
+        tableRow = &TableCatalog[tableId];
         // recordTableList row:
-        eeWriteUint16(address + RECORD_INDEX_OFFSET,    tableIdRow->recordIndexAddress);
-        eeWriteUint16(address + RECORD_DATA_OFFSET,     tableIdRow->recordDataAddress);
-        eeWriteUint8( address + RECORD_SIZE_OFFSET,     tableIdRow->recordSize);
-        eeWriteUint8( address + MAX_NUM_RECORDS_OFFSET, tableIdRow->maxNumRecords);
+        eeWriteUint16(address + RECORD_INDEX_OFFSET,    tableRow->recordIndexAddress);
+        eeWriteUint16(address + RECORD_DATA_OFFSET,     tableRow->recordDataAddress);
+        eeWriteUint8( address + RECORD_SIZE_OFFSET,     tableRow->recordSize);
+        eeWriteUint8( address + MAX_NUM_RECORDS_OFFSET, tableRow->maxNumRecords);
         // recordIndex start byte:
-        eeWriteUint8(tableIdRow->recordIndexAddress - 1, 0);
+        eeWriteUint8(tableRow->recordIndexAddress - 1, 0);
         // recordData start byte:
-        eeWriteUint8(tableIdRow->recordDataAddress - 1, 0);
+        eeWriteUint8(tableRow->recordDataAddress - 1, 0);
         address += TABLE_CATALOG_ROW_SIZE;
     }
     // final recordData end byte:
-    assert(tableIdRow != NULL);
+    assert(tableRow != NULL);
 
-    address = tableIdRow->recordDataAddress + getDataAreaSize(tableIdRow);
+    address = tableRow->recordDataAddress + getDataAreaSize(tableRow);
     eeWriteUint8(address, 0);
 }
 
@@ -397,39 +402,40 @@ void rs_commitTables(void) {
 }
 
 
-static eeAddress_t getDataAddress(tableDescriptorT* tableIdRow, const uint8_t record) {
-    uint8_t offset = getRecordIndex(tableIdRow, record);
-    return tableIdRow->recordDataAddress + offset * tableIdRow->recordSize;
+static eeAddress_t getDataAddress(tableDescriptorT* tableRow,
+                                  const uint8_t recordId) {
+    uint8_t offset = getRecordIndex(tableRow, recordId);
+    return tableRow->recordDataAddress + offset * tableRow->recordSize;
 }
 
 
 void rs_setRawRecord(const uint8_t tableId,
-                     const uint8_t record,
+                     const uint8_t recordId,
                      uint8_t* rawRecord) {
-    assertRecordExists(tableId, record);
-    tableDescriptorT* tableIdRow = &TableCatalog[tableId];
-    eeAddress_t eeAddress = getDataAddress(tableIdRow, record);
-    eeWriteUint8Array(eeAddress, rawRecord, tableIdRow->recordSize);
+    assertRecordExists(tableId, recordId);
+    tableDescriptorT* tableRow = &TableCatalog[tableId];
+    eeAddress_t eeAddress = getDataAddress(tableRow, recordId);
+    eeWriteUint8Array(eeAddress, rawRecord, tableRow->recordSize);
 }
 
 
 const uint8_t* rs_getRawRecord(const uint8_t tableId,
-                         const uint8_t record) {
-    assertRecordExists(tableId, record);
-    tableDescriptorT* tableIdRow = &TableCatalog[tableId];
-    eeAddress_t eeAddress = getDataAddress(tableIdRow, record);
-    eeReadUint8Array(eeAddress, tableIdRow->recordDataBuffer, tableIdRow->recordSize);
-    return tableIdRow->recordDataBuffer;
+                               const uint8_t recordId) {
+    assertRecordExists(tableId, recordId);
+    tableDescriptorT* tableRow = &TableCatalog[tableId];
+    eeAddress_t eeAddress = getDataAddress(tableRow, recordId);
+    eeReadUint8Array(eeAddress, tableRow->recordDataBuffer, tableRow->recordSize);
+    return tableRow->recordDataBuffer;
 }
 
 
 // close gap in recordIndex for deleting a record
-static void shiftRecordIndexDown(tableDescriptorT* tableIdRow,
-                                 const uint8_t record) {
-    for (uint8_t rec = record; rec < tableIdRow->numRecords; rec++) {
-        eeAddress_t eeAddress = tableIdRow->recordIndexAddress + rec;
+static void shiftRecordIndexDown(tableDescriptorT* tableRow,
+                                 const uint8_t recordId) {
+    for (uint8_t rec = recordId; rec < tableRow->numRecords; rec++) {
+        eeAddress_t eeAddress = tableRow->recordIndexAddress + rec;
         uint8_t index = eeReadUint8(eeAddress + 1);
-        if (rec >= tableIdRow->maxNumRecords - 1) { // FIXME: not covered by test
+        if (rec >= tableRow->maxNumRecords - 1) { // FIXME: not covered by test
             index = NO_RECORD_INDEX;
         }
         eeWriteUint8(eeAddress, index);
@@ -438,43 +444,43 @@ static void shiftRecordIndexDown(tableDescriptorT* tableIdRow,
 
 
 void rs_deleteRecord(const uint8_t tableId,
-                     const uint8_t record) {
-    assertRecordExists(tableId, record);
-    tableDescriptorT* tableIdRow = &TableCatalog[tableId];
-    markRecordFree(tableIdRow, record);
-    shiftRecordIndexDown(tableIdRow, record);
-    tableIdRow->numRecords--;
+                     const uint8_t recordId) {
+    assertRecordExists(tableId, recordId);
+    tableDescriptorT* tableRow = &TableCatalog[tableId];
+    markRecordFree(tableRow, recordId);
+    shiftRecordIndexDown(tableRow, recordId);
+    tableRow->numRecords--;
 }
 
 
 uint8_t rs_deleteAllRecords(const uint8_t tableId) {
     assertTableExists(tableId);
-    tableDescriptorT* tableIdRow = &TableCatalog[tableId];
-    for (uint8_t record = 0; record < tableIdRow->maxNumRecords; record++) {
-        setRecordIndex(tableIdRow, record, NO_RECORD_INDEX);
-        markRecordFree(tableIdRow, record);
+    tableDescriptorT* tableRow = &TableCatalog[tableId];
+    for (uint8_t recordId = 0; recordId < tableRow->maxNumRecords; recordId++) {
+        setRecordIndex(tableRow, recordId, NO_RECORD_INDEX);
+        markRecordFree(tableRow, recordId);
     }
-    uint8_t numDeletedRecords = tableIdRow->numRecords;
-    tableIdRow->numRecords = 0;
+    uint8_t numDeletedRecords = tableRow->numRecords;
+    tableRow->numRecords = 0;
     return numDeletedRecords;
 }
 
 
 // make space in recordIndex for inserting a new record
 // NOTE: if record == 255 (-1), nothing happens!
-static void shiftRecordIndexUp(tableDescriptorT* tableIdRow,
+static void shiftRecordIndexUp(tableDescriptorT* tableRow,
                                const uint8_t record) {
-    for (uint8_t rec = tableIdRow->numRecords - 1; rec > record; rec--) {
-        eeAddress_t eeAddress = tableIdRow->recordIndexAddress + rec;
+    for (uint8_t rec = tableRow->numRecords - 1; rec > record; rec--) {
+        eeAddress_t eeAddress = tableRow->recordIndexAddress + rec;
         uint8_t index = eeReadUint8(eeAddress);
         eeWriteUint8(eeAddress + 1, index);
     }
 }
 
 
-static uint8_t getNextFreeRecord(tableDescriptorT* tableIdRow) {
-    for (uint8_t rec = 0; rec < tableIdRow->maxNumRecords; rec++) {
-        if (recordIsFree(tableIdRow, rec)) {
+static uint8_t getNextFreeRecord(tableDescriptorT* tableRow) {
+    for (uint8_t rec = 0; rec < tableRow->maxNumRecords; rec++) {
+        if (recordIsFree(tableRow, rec)) {
             return rec;
         }
     }
@@ -482,33 +488,33 @@ static uint8_t getNextFreeRecord(tableDescriptorT* tableIdRow) {
 }
 
 
-static uint8_t insertRecordAt(tableDescriptorT* tableIdRow,
+static uint8_t insertRecordAt(tableDescriptorT* tableRow,
                               const uint8_t index) {
-    if (tableIdRow->numRecords >= tableIdRow->maxNumRecords) {
+    if (tableRow->numRecords >= tableRow->maxNumRecords) {
         return MAX_NUM_RECORDS_REACHED;
     }
-    uint8_t freeRecord = getNextFreeRecord(tableIdRow);
+    uint8_t freeRecord = getNextFreeRecord(tableRow);
     // numRecords < maxNumRecords, so there MUST be a free record:
     assert(freeRecord != NO_FREE_RECORD_FOUND);
-    shiftRecordIndexUp(tableIdRow, index - 1); //NOTE: index=0 is not a problem
-    setRecordIndex(tableIdRow, index, freeRecord);
-    markRecordInUse(tableIdRow, freeRecord);
+    shiftRecordIndexUp(tableRow, index - 1); //NOTE: index=0 is not a problem
+    setRecordIndex(tableRow, index, freeRecord);
+    markRecordInUse(tableRow, freeRecord);
 
-    tableIdRow->numRecords++;
+    tableRow->numRecords++;
     return index;
 }
 
 
 uint8_t rs_appendRecord(const uint8_t tableId) {
     assertTableExists(tableId);
-    tableDescriptorT* tableIdRow = &TableCatalog[tableId];
-    return insertRecordAt(tableIdRow, tableIdRow->numRecords);
+    tableDescriptorT* tableRow = &TableCatalog[tableId];
+    return insertRecordAt(tableRow, tableRow->numRecords);
 }
 
 
 uint8_t rs_insertRecordAfter(const uint8_t tableId,
                              const uint8_t record) {
     assertRecordExists(tableId, record);
-    tableDescriptorT* tableIdRow = &TableCatalog[tableId];
-    return insertRecordAt(tableIdRow, record + 1);
+    tableDescriptorT* tableRow = &TableCatalog[tableId];
+    return insertRecordAt(tableRow, record + 1);
 }

@@ -1,0 +1,10 @@
+DNDEBUG gebruiken als compiler flag bij productie code
+
+accessoires kiezen via variabel recordType
+
+settings kunnen dus ook variable recordTypes zijn:
+	1 record per setting,
+	met fixed type
+
+symbolen zijn speciale karakters in strings (>127)
+	deze speciale karakters worden er door writeLcd functies uitgefilterd en als spec. char gestuurd

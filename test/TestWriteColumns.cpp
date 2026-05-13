@@ -17,13 +17,6 @@ TEST_GROUP(WriteColumns) {
     }
 };
 
-/*
- * TODO:
- *
- * setCursorPos - does nothing yet
- * getCursorPos - is it needed?
- *
- */
 
 
 // wc_writeInteger
