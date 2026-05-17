@@ -206,6 +206,25 @@ void BDB_syncTable(const uint8_t tableId);
 void BDB_syncDbase(void);
 
 
+// import data:
+// ============
+
+/*
+ * Data is imported per record and validated against their .min/maxVal's as it
+ * is written.
+ * As soon as any invalid data is encountered, the import will halt and the
+ * number of successfully written records will be returned.
+ *
+ * Returns the number of successfully written records, so the caller should
+ * check that the return value is equal to numRecords.
+ *
+ * NOTE: Existing data in this table is overwritten!
+ */
+uint8_t BDB_importTable(const uint8_t tableId,
+						const uint16_t* data,
+						const uint8_t numRecords);
+
+
 // presentation:
 // =============
 

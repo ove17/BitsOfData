@@ -14,6 +14,9 @@
 #include <stdbool.h>
 
 
+#define BDB_ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+
+
 /*
  * Columns:
  * ========
@@ -25,15 +28,16 @@
  *  of the value.
  */
 typedef enum {
-    BDB_COLUMN_INTEGER,     // the default coltype
-    BDB_COLUMN_INT_ZEROTXT,	// writes text instead of 0
-    BDB_COLUMN_DECIMAL,     // introduces a decimal point
-    BDB_COLUMN_RECORD_TYPE,	// for variable record types
-    BDB_COLUMN_TXT_LIST,    // the value is an index to a list of strings
-    BDB_COLUMN_REFERENCE,	// the value is the recordId of another table
-    BDB_COLUMN_CHAR,        // the value is the index of a character set
-    BDB_COLUMN_STRING,		// virtual column, but points to CHAR columns
-    BDB_COLUMN_VIRTUAL,		// points to column in another table
+    BDB_COLUMN_INTEGER,         // the default coltype
+    BDB_COLUMN_INT_STEP,        // an integer that increases by a step value
+    BDB_COLUMN_INT_ZEROTXT,	    // writes text instead of 0
+    BDB_COLUMN_DECIMAL,         // introduces a decimal point
+    BDB_COLUMN_RECORD_TYPE,	    // for variable record types
+    BDB_COLUMN_TXT_LIST,        // the value is an index to a list of strings
+    BDB_COLUMN_REFERENCE,	    // the value is the recordId of another table
+    BDB_COLUMN_CHAR,            // the value is the index of a character set
+    BDB_COLUMN_STRING,		    // virtual column, but points to CHAR columns
+    BDB_COLUMN_VIRTUAL,		    // points to column in another table
 } BDB_colTypeT;
 
 /*
@@ -44,7 +48,8 @@ typedef enum {
                              getValue   changeValue	 printValue
  BDB_COLUMN_RECORD_TYPE     recordDefId		ok		   n/a
  BDB_COLUMN_INTEGER             int			ok			ok
- BDB_COLUMN_INTEGER_ZEROTXT     int			ok			ok
+ BDB_COLUMN_INT_STEP            int		   step			ok
+ BDB_COLUMN_INT_ZEROTXT         int			ok			ok
  BDB_COLUMN_DECIMAL          int*step		ok			ok
  BDB_COLUMN_CHAR                int			ok			ok
  BDB_COLUMN_TXT_LIST            int			ok			ok
@@ -65,11 +70,14 @@ typedef struct {
         struct { // INTEGER:
             bool leading0;
         };
+        struct { // INT_STEP:
+            int8_t intStep;
+        };
         struct { // DECIMAL:
             uint8_t decimalShift;   // left-shift of decimal point: >0 && <=5
             uint8_t decStep;        // allows steps of 1, 2 or 5
         };
-        struct { // INTEGER_ZEROTXT:
+        struct { // INT_ZEROTXT:
             uint8_t int0txt;        // id of static text to display if value == 0
         };
         struct { // TXT_LIST

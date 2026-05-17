@@ -1,7 +1,7 @@
 {
 	"name": "BitsOfData",
 	"files": [ { 
-		"directory": [".", "src", "include", "test", "mocks"],
+		"directory": [".", "src", "include", "test", "utils"],
 		"recursive": 1
 	} ]
 }

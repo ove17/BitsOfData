@@ -19,8 +19,7 @@ TEST_GROUP(WriteColumns) {
 
 
 
-// wc_writeInteger
-
+// wc_getCursorPosition
 
 TEST(WriteColumns, getCursorPositionReturnsPosition) {
     wc_setCursorPosition(5);
@@ -34,6 +33,8 @@ TEST(WriteColumns, writeIntegerIncreasesCursorPosition) {
     BYTES_EQUAL(5 + 3, wc_getCursorPosition());
 }
 
+
+// wc_writeInteger
 
 TEST(WriteColumns, writeIntegerWithValue0writes0) {
     wc_writeInteger(0, 3, false);

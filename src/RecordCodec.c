@@ -11,13 +11,23 @@
 #include "RecordCodec.h"
 
 
+// returns  1 if there is no step, so no effect
+static inline uint8_t getStep(const BDB_columnT* colDef) {
+    if (colDef->colType == BDB_COLUMN_DECIMAL) {
+        return colDef->decStep;
+    }
+    if (colDef->colType == BDB_COLUMN_INT_STEP) {
+        return colDef->intStep;
+    }
+    return 1;
+}
+
+
 static uint8_t getNumBitsOfColumn(const BDB_recordT* recordDef,
                                   const uint8_t column) {
     const BDB_columnT* colDef = &recordDef->columns[column];
     uint16_t colSize = colDef->maxValue - colDef->minValue;
-    if (colDef->colType == BDB_COLUMN_DECIMAL && colDef->decStep > 1) {
-        colSize /= colDef->decStep;
-    }
+    colSize /= getStep(colDef);
     return bu_getNumBits(colSize);
 }
 
@@ -64,9 +74,7 @@ void rc_encodeRecord(const uint16_t recordData[],   // input (separate values)
         const BDB_columnT* columnDef = &recordDef->columns[col];
         uint16_t minVal = columnDef->minValue;
         uint32_t value = (recordData[col] - minVal);
-        if (columnDef->colType == BDB_COLUMN_DECIMAL && columnDef->decStep > 1) {
-            value /= columnDef->decStep;
-        }
+        value /= getStep(columnDef);
         value &= bu_truncateMask(numBits);
 
         // add the entire value to the bitBuffer:
@@ -118,9 +126,7 @@ void rc_decodeRecord(const uint8_t rawRecord[], // input (packed)
             uint16_t minValue = columnDef->minValue;
             recordData[col] = (uint16_t)(bitBuffer >> shift);
             recordData[col] &= bu_truncateMask(numBits);
-            if (columnDef->colType == BDB_COLUMN_DECIMAL && columnDef->decStep > 1) {
-                recordData[col] *= columnDef->decStep;
-            }
+            recordData[col] *= getStep(columnDef);
             recordData[col] += minValue;
         }
 

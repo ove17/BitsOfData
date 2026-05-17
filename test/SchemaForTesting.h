@@ -27,7 +27,7 @@ static const uint8_t txtList[] = { 1, 2, 0 };
 
 static const BDB_columnT columnsDef[] = {
     {.maxValue = 8, .defaultVal = 7, .minValue = 3},
-    {.maxValue = 4000, .defaultVal = 1234,},
+    {.maxValue = 4000, .defaultVal = 1234, .leading0=true},
     {.colType = BDB_COLUMN_REFERENCE, .refTable = 2, .maxValue = maxNumRecordsInTable2 - 1,},
     {.colType = BDB_COLUMN_INT_ZEROTXT, .maxValue = 10, .defaultVal = 2, .int0txt = 2},
     {.colType = BDB_COLUMN_VIRTUAL, .virtRecordCol = 2, .virtValueCol = 1},
@@ -88,7 +88,7 @@ static const BDB_tableT table1 = {
 };
 
 static const BDB_columnT columnsDef2[] = {
-    {.colType = BDB_COLUMN_INTEGER, .maxValue = 255, .leading0 = true,},
+    {.colType = BDB_COLUMN_INT_STEP, .maxValue = 248, .defaultVal = 24, .intStep = 8},
     {.colType = BDB_COLUMN_CHAR, .maxValue = CHARSET_MAX, .charSet = charSet},
     {.colType = BDB_COLUMN_CHAR, .maxValue = CHARSET_MAX, .charSet = charSet},
     {.colType = BDB_COLUMN_CHAR, .maxValue = CHARSET_MAX, .charSet = charSet},

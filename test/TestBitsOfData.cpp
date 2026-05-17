@@ -136,6 +136,8 @@ TEST(UseDbase, setValueOnVariableRecDefChangesBuffer) {
 }
 
 
+// changeValue
+
 TEST(UseDbase, changeValueUpWhenItIsAlreadyMaxFails) {
     BDB_setValue(0, 0, 0, 8);
     CHECK_FALSE(BDB_changeValue(0, 0, 0, 1));
@@ -487,6 +489,24 @@ TEST(UseDbase, canRecordBeAddedReturnsFalseeIfThereAreMaxRecords) {
 }
 
 
+TEST(UseDbase, insertRecordAfterDoesNotAffectPreviousRecord) {
+    static const uint16_t record0[] = {0,   0,   0,    0,   5, 0};
+    BDB_setRecord(1, 0, record0);
+    CHECK_TRUE(BDB_insertRecordAfter(1, 0));
+    CHECK_UINT16_ARRAY_EQUAL(record0, BDB_getRecord(1, 0), 6);
+}
+
+
+TEST(UseDbase, insertRecordAfterDoesNotAffectNextRecord) {
+    BDB_insertRecordAfter(1, 0);
+    static const uint16_t record0[] = {0,   0,   0,    0,   5, 0};
+    static const uint16_t record1[] = {0, 300, 100, 1024, 995, 2};
+    BDB_setRecord(1, 0, record0);
+    BDB_setRecord(1, 1, record1);
+    BDB_insertRecordAfter(1, 0);
+    CHECK_UINT16_ARRAY_EQUAL(record1, BDB_getRecord(1, 2), 6);
+}
+
 // deleting records
 
 
@@ -538,27 +558,149 @@ TEST(UseDbase, canRecordBeDeteted_ReturnsFalseIf_ItIsReferencedFromAVariableReco
 }
 
 
+// importing table
+
+
+TEST(UseDbase, importTableWithValidDataReturnsNumRecords) {
+    static const uint16_t table1Data[] = {
+        0,   0,   0,    0,   5, 0,
+        0, 300, 100, 1024, 995, 2
+    };
+    uint8_t numRecords = 2;
+    BYTES_EQUAL(numRecords, BDB_importTable(1, table1Data, numRecords));
+    BYTES_EQUAL(numRecords, BDB_getNumRecords(1));
+}
+
+
+TEST(UseDbase, importTableWithValidDataSetsRecords) {
+    static const uint16_t table1Data[] = {
+        0,   0,   0,    0,   5, 0,
+        0, 123,  50,  499,  30, 1,
+        0, 300, 100, 1024, 500, 2
+    };
+    uint8_t numRecords = 3;
+    uint8_t numColumns = 6;
+    BDB_importTable(1, table1Data, numRecords);
+    for (uint8_t rec = 0; rec < numRecords; rec++) {
+        CHECK_UINT16_ARRAY_EQUAL(table1Data + rec * numColumns, BDB_getRecord(1, rec), 6);
+        for (uint8_t col = 0; col < numColumns; col++) {
+            LONGS_EQUAL(table1Data[numColumns * rec + col], BDB_getValue(1, rec, col));
+        }
+    }
+}
+
+
+TEST(UseDbase, importTableWith2recordsOverwrites3records) {
+    BDB_insertRecordAfter(1, 0);
+    BDB_insertRecordAfter(1, 0);
+    uint16_t record0[] = {0, 1,  50,  499,  30, 1};
+    uint16_t record1[] = {0, 2,  50,  499,  30, 1};
+    uint16_t record2[] = {0, 3,  50,  499,  30, 1};
+    BDB_setRecord(1, 0, record0);
+    BDB_setRecord(1, 1, record1);
+    BDB_setRecord(1, 2, record2);
+    BYTES_EQUAL(3, BDB_getNumRecords(1));
+    static const uint16_t table1Data[] = {
+        0,   0,   0,    0,   5, 0,
+        0, 300, 100, 1024, 995, 2
+    };
+    uint8_t numRecords = 2;
+    BYTES_EQUAL(numRecords, BDB_importTable(1, table1Data, numRecords));
+    BYTES_EQUAL(numRecords, BDB_getNumRecords(1));
+    BYTES_EQUAL(2, BDB_getNumRecords(1));
+    BYTES_EQUAL(0, BDB_getValue(1, 0, 1));
+    BYTES_EQUAL(300, BDB_getValue(1, 1, 1));
+}
+
+
+TEST(UseDbase, importTableReturnsRecordIdOfDataUnderMinValue) {
+    static const uint16_t table1Data[] = {
+        0,   0,   0,    0,   5, 0,
+        0,   0,   0,    0,   4, 0,
+        0, 300, 100, 1024, 995, 2
+    };
+    uint8_t numRecords = 3;
+    BYTES_EQUAL(1, BDB_importTable(1, table1Data, numRecords));
+}
+
+
+TEST(UseDbase, importTableReturnsRecordIdOfDataOverMaxValue) {
+    static const uint16_t table1Data[] = {
+        0,   0,   0,    0,   5, 0,
+        0,   0, 101,    0,   5, 0,
+        0, 300, 100, 1024, 995, 2
+    };
+    uint8_t numRecords = 3;
+    BYTES_EQUAL(1, BDB_importTable(1, table1Data, numRecords));
+}
+
+
+TEST(UseDbase, importTableReturnsRecordIdOfDataWithWrongStep) {
+    static const uint16_t table1Data[] = {
+        0,   0,   0,    0,   5, 0,
+        0,   0,   0,    0, 178, 0,
+        0, 300, 100, 1024, 995, 2
+    };
+    uint8_t numRecords = 3;
+    BYTES_EQUAL(1, BDB_importTable(1, table1Data, numRecords));
+}
+
+
+TEST(UseDbase, importTableReturnsRecordIdOfDataThatReferencesNonExistingRecord) {
+    rs_appendRecord(2);
+    rs_appendRecord(2);
+    static const uint16_t table0Data[] = {
+        3,    0,   0,  0,
+        3,    0,   3,  0,
+        8, 4000,   2, 10,
+    };
+    uint8_t numRecords = 3;
+    BYTES_EQUAL(1, BDB_importTable(0, table0Data, numRecords));
+}
+
+
 // BDB_COLUMN_INTEGER
 
 
-TEST(UseDbase, stringValueOf4DigitIntReturnsStringOfLength4) {
+TEST(UseDbase, writeValueOf4DigitIntReturnsStringOfLength4) {
     BYTES_EQUAL(4, BDB_writeValue(0, 0, 1, 0));
     MEMCMP_EQUAL("1234", BDB_getWriteBuffer(), 4);
 }
 
 
 // where maxDigits == numDigits of .maxValue
-TEST(UseDbase, stringValueOf1DigitIntReturnsStringOfMaxLength) {
-    BDB_setValue(0, 0, 1, 9);
-    BYTES_EQUAL(4, BDB_writeValue(0, 0, 1, 0));
+TEST(UseDbase, writeValueOf1DigitIntReturnsStringOfMaxLength) {
+    BDB_setValue(1, 0, 3, 9);
+    BYTES_EQUAL(4, BDB_writeValue(1, 0, 3, 0));
     MEMCMP_EQUAL("   9", BDB_getWriteBuffer(), 4);
 }
 
 
-TEST(UseDbase, stringValueOfIntWithLeading0ReturnsStringWithLeading0s) {
-    BDB_setValue(2, 0, 0, 14);
+TEST(UseDbase, writeValueOfIntWithLeading0ReturnsStringWithLeading0s) {
+    BDB_setValue(0, 0, 1, 12);
+    BYTES_EQUAL(4, BDB_writeValue(0, 0, 1, 0));
+    STRNCMP_EQUAL("0012", BDB_getWriteBuffer(), 4);
+}
+
+// BDB_COLUMN_INT_STEP
+
+
+TEST(UseDbase, setValueOfIntStepToInvalidValueFails) {
+    CHECK_FALSE(BDB_setValue(2, 0, 0, 15));
+}
+
+
+TEST(UseDbase, changeValueBy1IncreasesIntStepValueByStep) {
+    BDB_setValue(2, 0, 0, 40);
+    CHECK_TRUE(BDB_changeValue(2, 0, 0, 1));
+    LONGS_EQUAL(48, BDB_getValue(2, 0, 0));
+}
+
+
+TEST(UseDbase, writeValueOfIntStepReturnsStringWithoutLeading0) {
+    BDB_setValue(2, 0, 0, 64);
     BYTES_EQUAL(3, BDB_writeValue(2, 0, 0, 0));
-    MEMCMP_EQUAL("014", BDB_getWriteBuffer(), 3);
+    MEMCMP_EQUAL(" 64", BDB_getWriteBuffer(), 3);
 }
 
 
@@ -679,7 +821,7 @@ TEST(UseDbase, getValueOnStringColumnFails) {
 
 
 TEST(UseDbase, writeValueOnAStringColumnWritesAllChars) {
-    uint16_t rec2[] = { 185, 12, 16, 0, 28 };
+    uint16_t rec2[] = { 184, 12, 16, 0, 28 };
     CHECK_TRUE(BDB_setRecord(2, 0, rec2));
     BDB_writeValue(2, 0, 5, 0);
     STRNCMP_EQUAL("AE Q", BDB_getWriteBuffer() , 4);
@@ -799,8 +941,8 @@ TEST(UseDbaseWithTxt, writeValue_onTxtListColumn_fillsUpToLengthOfLongestTxtInLi
 TEST(UseDbaseWithTxt, writeRecordReturnsStringForEntireRecord) {
     // NOTE: format is texts[4]
     BDB_openDataBase(&dbaseDef, getTxt);
-    uint16_t rec2[] = { 185, 12, 13, 14, 15 };
+    uint16_t rec2[] = { 184, 12, 13, 14, 15 };
     CHECK_TRUE(BDB_setRecord(2, 0, rec2));
     BYTES_EQUAL(14, BDB_writeRecord(2, 0));
-    STRNCMP_EQUAL(" 185 ABCD-ABCD", BDB_getWriteBuffer(), 14);
+    STRNCMP_EQUAL(" 184 ABCD-ABCD", BDB_getWriteBuffer(), 14);
 }

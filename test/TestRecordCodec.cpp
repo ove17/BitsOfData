@@ -108,6 +108,19 @@ TEST(RecordCodec, getRecordSizeOnDecimalRecordWithStepIsReduced) {
 }
 
 
+TEST(RecordCodec, getRecordSizeOnIntStepRecordIsReduced) {
+    static const BDB_columnT columns[] = {
+        {.colType = BDB_COLUMN_INT_STEP, .minValue = 50, .maxValue = 4130, .intStep = 16},
+    };
+    static const BDB_recordT recordDef = {
+        .numColumns = 1,
+        .columns = columns,
+    };
+    // expected: (4130 - 50)/16 = 255, so 1 byte
+    BYTES_EQUAL(1, rc_getRecordSize(&recordDef));
+}
+
+
 TEST(RecordCodec, encodeRecordReturnsValueOnRecordWith8bitColumn) {
     uint8_t value = 100;
     const uint16_t recordData[1] = {value,};
@@ -286,4 +299,25 @@ TEST(RecordCodec, encodingDecimalColumnsThenDecodingReturnsSameValue) {
 }
 
 
-
+TEST(RecordCodec, encodingIntStepColumnsThenDecodingReturnsSameValue) {
+    const uint16_t recordData[] = {1000, 170};
+    uint8_t rawRecord[3] = { 0 };
+    static const BDB_columnT columns[] = {
+        {.colType = BDB_COLUMN_INT_STEP, .minValue = 8, .maxValue = 2040, .intStep = 8},
+        {.maxValue = 255},
+    };
+    static const BDB_recordT recordDef = {
+        .numColumns = 2,
+        .columns = columns,
+    };
+    static const BDB_recordT recordDefs[] = {recordDef};
+    BDB_tableT tableDef = {
+        .numRecordDefs = 1,
+        .recordDefs = recordDefs,
+    };
+    rc_encodeRecord(recordData, rawRecord, &tableDef);
+    rawRecord[2] = 0; // wipe excess bits to make sure record fits in 2 bytes
+    uint16_t recordDataOut[2] = { 0 };
+    rc_decodeRecord(rawRecord, recordDataOut, &tableDef);
+    CHECK_UINT16_ARRAY_EQUAL(recordData, recordDataOut, 2);
+}

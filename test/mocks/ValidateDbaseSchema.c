@@ -30,11 +30,22 @@ static void assertIntegerColumnIsValid(const BDB_columnT* columnDef) {
 }
 
 
+static void assertIntStepColumnIsValid(const BDB_columnT* columnDef) {
+    assert(columnDef->maxValue > columnDef->minValue);
+    assert(columnDef->defaultVal >= columnDef->minValue);
+    assert(columnDef->defaultVal <= columnDef->maxValue);
+    const uint8_t step = columnDef->intStep;
+    assert(step > 1);
+    // step must not cause remainder:
+    assert((columnDef->maxValue - columnDef->minValue) % step == 0);
+    assert((columnDef->defaultVal - columnDef->minValue) % step == 0);
+}
+
+
 static void assertIntZeroTxtColumnIsValid(const BDB_columnT* columnDef) {
     assert(columnDef->minValue == 0);
     assert(columnDef->maxValue > 0);
     assert(columnDef->defaultVal <= columnDef->maxValue);
-    assert(columnDef->int0txt > 0);
     // NOTE: assertion GetTxtPtr != NULL must be in BitsOfData.c
 }
 
@@ -49,6 +60,7 @@ static void assertDecimalColumnIsValid(const BDB_columnT* columnDef) {
     assert(step == 1 || step == 2 || step == 5); // NOTE: step == 0 would cause div/0
     // step must not cause remainder:
     assert((columnDef->maxValue - columnDef->minValue) % step == 0);
+    assert((columnDef->defaultVal - columnDef->minValue) % step == 0);
 }
 
 
@@ -151,6 +163,10 @@ void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef) {
                 switch(columnDef->colType) {
                     case BDB_COLUMN_INTEGER :
                         assertIntegerColumnIsValid(columnDef);
+                        ASSERT_VALID(!virtualColumnPresent);
+                        break;
+                    case BDB_COLUMN_INT_STEP :
+                        assertIntStepColumnIsValid(columnDef);
                         ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_INT_ZEROTXT :

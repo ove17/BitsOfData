@@ -116,16 +116,13 @@ static const BDB_columnT* getColumnDef(const BDB_recordT* recordDef,
 
 static uint8_t getMaxNumColumns(const uint8_t tableId) {
     uint8_t maxNumColumns = 0;
-    const uint8_t numTables = DbaseDef->numTables;
-    for (uint8_t tableId = 0; tableId < numTables; tableId++) {
-        const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
-        const uint8_t numRecDefs = tableDef->numRecordDefs;
-        for (uint8_t recDefId = 0; recDefId < numRecDefs; recDefId++) {
-            const BDB_recordT* recordDef = &tableDef->recordDefs[recDefId];
-            const uint8_t numColumns = recordDef->numColumns;
-            if (numColumns > maxNumColumns) {
-                maxNumColumns = numColumns;
-            }
+    const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
+    const uint8_t numRecDefs = tableDef->numRecordDefs;
+    for (uint8_t recDefId = 0; recDefId < numRecDefs; recDefId++) {
+        const BDB_recordT* recordDef = &tableDef->recordDefs[recDefId];
+        const uint8_t numColumns = recordDef->numColumns;
+        if (numColumns > maxNumColumns) {
+            maxNumColumns = numColumns;
         }
     }
     return maxNumColumns;
@@ -195,6 +192,7 @@ static void setColumnsToDefaultValue(const uint8_t tableId,
                                      const uint8_t recordId,
                                      const uint8_t startColumnId,
                                      const BDB_recordT* recordDef) {
+    writeRecordBufferIfDirty(tableId);
     RecordBuffers[tableId].recordId = recordId;
     uint8_t numColumns = recordDef->numColumns;
     for (uint8_t col = startColumnId; col < numColumns; col++) {
@@ -370,7 +368,6 @@ static bool shiftReferenceUp(const uint8_t tableId,
 static bool shiftRecordReferencesUp(const uint8_t refTableId,
                                     const uint8_t refRecordId) {
     return forEachReference(refTableId, refRecordId, shiftReferenceUp);
-
 }
 
 
@@ -399,12 +396,13 @@ bool BDB_canRecordBeAdded(const int8_t tableId) {
 
 bool BDB_insertRecordAfter(const int8_t tableId,
                            const uint8_t recordId) {
+    writeRecordBufferIfDirty(tableId);
     uint8_t newRecordId = rs_insertRecordAfter(tableId, recordId);
     if (newRecordId == MAX_NUM_RECORDS_REACHED) {
         return false;
     }
     shiftRecordReferencesUp(tableId, recordId);
-    setRecordToDefaultValues(tableId, recordId + 1);
+    setRecordToDefaultValues(tableId, newRecordId);
     return true;
 }
 
@@ -417,6 +415,14 @@ static bool validateDecimalValue(const BDB_columnT* columnDef,
 }
 
 
+// returns false if a column is INT_STEP and its value is invalid
+static bool validateIntStepValue(const BDB_columnT* columnDef,
+                                 const uint16_t value) {
+    return (columnDef->colType != BDB_COLUMN_INT_STEP)
+            || (value - columnDef->minValue) % columnDef->intStep == 0;
+}
+
+
 static bool validateRecord(const uint8_t tableId,
                            const uint16_t* data) {
     const BDB_recordT* recordDef = getRecordDefFromData(tableId, data);
@@ -426,7 +432,8 @@ static bool validateRecord(const uint8_t tableId,
         if (rc_isVirtualColumn(columnDef)) continue;
         if (       data[col] < columnDef->minValue
                 || data[col] > getMaxValue(columnDef)
-                || !validateDecimalValue(columnDef, data[col])) {
+                || !validateDecimalValue(columnDef, data[col])
+                || !validateIntStepValue(columnDef, data[col])) {
             return false;
         }
     }
@@ -555,8 +562,9 @@ bool BDB_setValue (const uint8_t tableId,
     if (       value < columnDef->minValue
             || value > getMaxValue(columnDef)
             || rc_isVirtualColumn(columnDef)
-            || !validateDecimalValue(columnDef, value)) {
-        return false;
+            || !validateDecimalValue(columnDef, value)
+            || !validateIntStepValue(columnDef, value)) {
+            return false;
     }
     setValue(tableId, recordId, columnId, value);
     return true;
@@ -575,6 +583,9 @@ bool BDB_changeValue(const uint8_t tableId,
     if (columnDef->colType == BDB_COLUMN_DECIMAL) {
         delta *= columnDef->decStep;
     }
+    if (columnDef->colType == BDB_COLUMN_INT_STEP) {
+        delta *= columnDef->intStep;
+    }
     int16_t value = BDB_getValue(tableId, recordId, columnId);
     int16_t newValue = mu_limitValue(columnDef->minValue,
                                      value + delta,
@@ -584,6 +595,31 @@ bool BDB_changeValue(const uint8_t tableId,
     }
     setValue(tableId, recordId, columnId, (uint16_t)(newValue));
     return true;
+}
+
+
+void clearRecordBuffer(const uint8_t tableId) {
+    RecordBuffers[tableId].recordId = NO_RECORD_ID;
+    RecordBuffers[tableId].isModified = false;
+}
+
+
+uint8_t BDB_importTable(const uint8_t tableId,
+                        const uint16_t* data,
+                        const uint8_t numRecords) {
+    uint8_t maxNumRecords = DbaseDef->tables[tableId].maxNumRecords;
+    assert(numRecords <= maxNumRecords);
+    rs_deleteAllRecords(tableId);
+    clearRecordBuffer(tableId);
+    uint16_t dataId = 0;
+    uint8_t rec = 0;
+    for (; rec < numRecords; rec++) {
+        rs_appendRecord(tableId);
+        if (!BDB_setRecord(tableId, rec, &data[dataId])) break;
+        dataId += BDB_getNumRealColumns(tableId, rec);
+    }
+    BDB_setRecord(tableId, 0, &data[0]);
+    return rec;
 }
 
 
@@ -623,6 +659,12 @@ static void writeValue(const uint8_t tableId,
             const uint16_t maxValue = columnDef->maxValue;
             const uint8_t numDigits = mu_getNumDigits(maxValue);
             wc_writeInteger(value, numDigits, columnDef->leading0);
+            break;
+        }
+        case BDB_COLUMN_INT_STEP : {
+            const uint16_t maxValue = columnDef->maxValue;
+            const uint8_t numDigits = mu_getNumDigits(maxValue);
+            wc_writeInteger(value, numDigits, false);
             break;
         }
         case BDB_COLUMN_INT_ZEROTXT : {

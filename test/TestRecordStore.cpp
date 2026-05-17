@@ -341,17 +341,16 @@ TEST(Records, insertRecordAfterIncreasesTheNumberOfRecordsByOne) {
     BYTES_EQUAL(maxNumRecords, rs_getNumRecords(0));
 }
 
-
-TEST(Records, insertRecordAfter_On2ndRecord_InsertsRecordIndex) {
+TEST(Records, insertRecordAfterDoesNotAffectNextRecord) {
     createRecords(0, 2);        // recordIndex: 0, 1
-    uint8_t rec[3] = {1,0,0};   rs_setRawRecord(0, 0, rec);
-    rec[0] = 2;                 rs_setRawRecord(0, 1, rec);
-//dumpFakeEe(1, 7, numBytesPerTable);
-    BYTES_EQUAL(1, rs_insertRecordAfter(0, 0)); // recordIndex: 0, 2, 1
-//dumpFakeEe(1, 7, numBytesPerTable);
-    BYTES_EQUAL(   1, *rs_getRawRecord(0, 0));
-    BYTES_EQUAL(0xFF, *rs_getRawRecord(0, 1)); // the inserted record
-    BYTES_EQUAL(   2, *rs_getRawRecord(0, 2));
+    uint8_t rec0[3] = {1, 2, 3};
+    rs_setRawRecord(0, 0, rec0);
+    uint8_t rec1[3] = {4, 5, 6};
+    rs_setRawRecord(0, 1, rec1);
+    BYTES_EQUAL(1, rs_insertRecordAfter(0, 0));
+    BYTES_EQUAL(rec0[0], *rs_getRawRecord(0, 0)); // rec0
+    BYTES_EQUAL(   0xFF, *rs_getRawRecord(0, 1)); // the inserted record
+    BYTES_EQUAL(rec1[0], *rs_getRawRecord(0, 2)); // rec1
 }
 
 
