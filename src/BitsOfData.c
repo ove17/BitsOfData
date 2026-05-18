@@ -661,6 +661,11 @@ static void writeValue(const uint8_t tableId,
             wc_writeInteger(value, numDigits, columnDef->leading0);
             break;
         }
+        case BDB_COLUMN_PERCENTAGE : {
+            const uint16_t maxValue = columnDef->maxValue;
+            wc_writeInteger((100 * value)/maxValue, 3, false);
+            break;
+        }
         case BDB_COLUMN_INT_STEP : {
             const uint16_t maxValue = columnDef->maxValue;
             const uint8_t numDigits = mu_getNumDigits(maxValue);

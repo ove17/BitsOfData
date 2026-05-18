@@ -77,7 +77,7 @@ TEST(UseDbase, getNumRealColumnsReturnsNumColumnsWithoutVirtual) {
 TEST(UseDbase, getNumRealColumnsReturnsNumColumnsWithoutVirtualForVariableRecordType) {
     const uint8_t recordType = 1;
     BDB_setValue(1, 0, 0, recordType);
-    BYTES_EQUAL(3, BDB_getNumRealColumns(1, 0));
+    BYTES_EQUAL(4, BDB_getNumRealColumns(1, 0));
 }
 
 
@@ -682,6 +682,18 @@ TEST(UseDbase, writeValueOfIntWithLeading0ReturnsStringWithLeading0s) {
     STRNCMP_EQUAL("0012", BDB_getWriteBuffer(), 4);
 }
 
+
+// BDB_COLUMN_PERCENTAGE
+
+
+TEST(UseDbase, writeValueOfPercentageReturnsPercentage) {
+    BDB_setValue(1, 0, 0, 1);
+    BYTES_EQUAL(10, BDB_getValue(1, 0, 3));
+    BYTES_EQUAL(3, BDB_writeValue(1, 0, 3, 0));
+    STRNCMP_EQUAL(" 40", BDB_getWriteBuffer(), 3);
+}
+
+
 // BDB_COLUMN_INT_STEP
 
 
@@ -781,7 +793,7 @@ TEST(UseDbase, getValueOnAVirtualColumn_ReturnsValueOfTheReferencedTableColumn) 
 TEST(UseDbase, writeValueOnAVirtualColumn_WritesValueOfTheReferencedTableColumn) {
     BDB_setValue(1, 0, 0, 1); // change record definition
     BDB_setValue(2, 0, 1, 13); // value of referenced table, column
-    BYTES_EQUAL(1, BDB_writeValue(1, 0, 3, 0));
+    BYTES_EQUAL(1, BDB_writeValue(1, 0, 4, 0));
     BYTES_EQUAL(charSet[13], BDB_getWriteBuffer()[0]);
 }
 

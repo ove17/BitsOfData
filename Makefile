@@ -1,6 +1,6 @@
 CC=gcc
 
-CFLAGS=-Wall -Wextra \
+CFLAGS=-Wall -Wextra -g -O0 \
         -Iinclude \
         -Iutils \
         -Itest/mocks \

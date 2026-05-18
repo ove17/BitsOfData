@@ -87,21 +87,78 @@ static void assertCharColumnIsValid(const BDB_columnT* columnDef) {
 }
 
 
+static uint8_t getMinNumColumns(const BDB_tableT* tableDef) {
+    uint8_t minNumColumns = 0xFF;
+    const uint8_t numRecDefs = tableDef->numRecordDefs;
+    for (uint8_t recDefId = 0; recDefId < numRecDefs; recDefId++) {
+        const BDB_recordT* recordDef = &tableDef->recordDefs[recDefId];
+        const uint8_t numColumns = recordDef->numColumns;
+        if (numColumns < minNumColumns) {
+            minNumColumns = numColumns;
+        }
+    }
+    return minNumColumns;
+}
+
+
 static void assertReferenceColumnIsValid(const BDB_dbaseDefT* dbaseDef,
-                                         const BDB_recordT* recordDef,
                                          const BDB_columnT* columnDef) {
     assert(columnDef->minValue == 0);
     assert(columnDef->defaultVal == 0);
     assert(columnDef->maxValue > 0);
     const uint8_t refTableId = columnDef->refTable;
-    const uint8_t maxNumRecords = dbaseDef->tables[refTableId].maxNumRecords;
-    const uint8_t numColumns = recordDef->numColumns;
     assert(refTableId < dbaseDef->numTables);
-    assert(columnDef->refColumn < numColumns);
+// make sure the reference column exists in all target record types:
+    const BDB_tableT* refTableDef = &dbaseDef->tables[refTableId];
+    const uint8_t minNumColumns = getMinNumColumns(refTableDef);
+    assert(columnDef->refColumn < minNumColumns);
+    const uint8_t maxNumRecords = dbaseDef->tables[refTableId].maxNumRecords;
     assert(columnDef->maxValue == maxNumRecords - 1);
-    //table referenced to must NOT have variable recordType:
-    assert(dbaseDef->tables[refTableId].numRecordDefs == 1);
+}
 
+
+static bool isReferenceColumn(const BDB_recordT* recordDef,
+                              const uint8_t columnId) {
+    const BDB_columnT* refColDef = &recordDef->columns[columnId];
+    const BDB_colTypeT refColType = refColDef->colType;
+    return refColType == BDB_COLUMN_REFERENCE;
+}
+
+
+static uint8_t getHighestMaxValue(const BDB_tableT* tableDef,
+                                  const uint8_t columnId) {
+    uint8_t highestMaxValue = 0;
+    const uint8_t numRecDefs = tableDef->numRecordDefs;
+    for (uint8_t recDefId = 0; recDefId < numRecDefs; recDefId++) {
+        const BDB_recordT* recordDef = &tableDef->recordDefs[recDefId];
+        const BDB_columnT* columnDef = &recordDef->columns[columnId];
+        const uint16_t maxValue = columnDef->maxValue;
+        if (maxValue > highestMaxValue) {
+            highestMaxValue = (uint8_t)maxValue;
+        }
+    }
+    return highestMaxValue;
+}
+
+
+static void assertCopyColumnIsValid(const BDB_dbaseDefT* dbaseDef,
+                                    const BDB_recordT* recordDef,
+                                    const BDB_columnT* columnDef) {
+    assert(columnDef->minValue == 0);
+    assert(columnDef->defaultVal == 0);
+    assert(columnDef->maxValue > 0);
+// refCol must be a REFERENCE column in the same table:
+    const uint8_t refColId = columnDef->copyRefCol;
+    assert(isReferenceColumn(recordDef, refColId));
+// copyPropsCol must be < minNumColumns in the REFERENCED refTable
+    const BDB_columnT* refColDef = &recordDef->columns[refColId];
+    const uint8_t refTableId = refColDef->refTable;
+    const BDB_tableT* refTableDef = &dbaseDef->tables[refTableId];
+    uint8_t minNumColumns = getMinNumColumns(refTableDef);
+    assert(columnDef->copyPropsCol < minNumColumns);
+// maxValue must be highest maxValue in the target column of each variable record def:
+    const uint8_t highestMaxValue = getHighestMaxValue(refTableDef, columnDef->copyPropsCol);
+    assert(columnDef->maxValue == highestMaxValue);
 }
 
 
@@ -111,11 +168,11 @@ static void assertVirtualColumnIsValid(const BDB_dbaseDefT* dbaseDef,
     assert(columnDef->minValue == 0);
     assert(columnDef->defaultVal == 0);
     assert(columnDef->maxValue == 0);
-    const uint8_t virtualRecordCol = columnDef->virtRecordCol;
-    const BDB_columnT* refColDef = &recordDef->columns[virtualRecordCol];
-    const BDB_colTypeT refColType = refColDef->colType;
-    assert(refColType == BDB_COLUMN_REFERENCE);
-    // virtualColumn must not point to virtualColumn:
+// refCol must be a REFERENCE column in the same table:
+    const uint8_t refColId = columnDef->virtRecordCol;
+    assert(isReferenceColumn(recordDef, refColId));
+// virtualColumn must not point to a virtualColumn:
+    const BDB_columnT* refColDef = &recordDef->columns[refColId];
     const uint8_t refTableId = refColDef->refTable;
     const BDB_tableT* refTableDef = &dbaseDef->tables[refTableId];
     const BDB_recordT* refRrecordDef = &refTableDef->recordDefs[0];
@@ -162,6 +219,7 @@ void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef) {
                 const BDB_columnT* columnDef = &recordDef->columns[Col];
                 switch(columnDef->colType) {
                     case BDB_COLUMN_INTEGER :
+                    case BDB_COLUMN_PERCENTAGE :
                         assertIntegerColumnIsValid(columnDef);
                         ASSERT_VALID(!virtualColumnPresent);
                         break;
@@ -182,11 +240,15 @@ void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef) {
                         ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_REFERENCE :
-                        assertReferenceColumnIsValid(dbaseDef, recordDef, columnDef);
+                        assertReferenceColumnIsValid(dbaseDef, columnDef);
                         ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_VIRTUAL :
                         assertVirtualColumnIsValid(dbaseDef, recordDef, columnDef);
+                        virtualColumnPresent = true;
+                        break;
+                    case BDB_COLUMN_COPY :
+                        assertCopyColumnIsValid(dbaseDef, recordDef, columnDef);
                         virtualColumnPresent = true;
                         break;
                     case BDB_COLUMN_CHAR :

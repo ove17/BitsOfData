@@ -73,10 +73,11 @@ static const BDB_columnT columnsDef1[] = {
     recordTypeColumn,
     {.maxValue = 85, .defaultVal = 45, .minValue = 5},
     {.colType = BDB_COLUMN_REFERENCE, .refTable = 2, .maxValue = maxNumRecordsInTable2 - 1,},
+    {.colType = BDB_COLUMN_PERCENTAGE, .maxValue = 25, .defaultVal = 10},
     {.colType = BDB_COLUMN_VIRTUAL, .virtRecordCol = 2, .virtValueCol = 1},
 };
 static const BDB_recordT recordDef1 = {
-    .numColumns = 3,
+    .numColumns = 5,
     .columns = columnsDef1,
 };
 static const BDB_recordT recordDefs1[] = {recordDef0, recordDef1};
