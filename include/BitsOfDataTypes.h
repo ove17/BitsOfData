@@ -16,6 +16,9 @@
 
 #define BDB_ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
+#define BDB_SELF_REFERENCE 0xFF // for BDB_columnT.ref.tableId
+#define BDB_MAX_NUM_CHILD_COLUMNS 1     // TODO: in validation.c: add check for max
+
 
 /*
  * Columns:
@@ -31,16 +34,18 @@ typedef enum {
     BDB_COLUMN_INTEGER,         // the default coltype
     BDB_COLUMN_PERCENTAGE,      // percentage of .maxValue
     BDB_COLUMN_INT_STEP,        // an integer that increases by a step value
-    BDB_COLUMN_INT_ZEROTXT,	    // writes text instead of 0
     BDB_COLUMN_DECIMAL,         // introduces a decimal point
     BDB_COLUMN_RECORD_TYPE,	    // for variable record types
     BDB_COLUMN_TXT_LIST,        // the value is an index to a list of strings
+    BDB_COLUMN_TXT_LIST_COPY,   // the value uses the columnDef from a TXT_LIST
+                                //  in another table
     BDB_COLUMN_CHAR,            // the value is the index of a character set
+    BDB_COLUMN_CHILD_TABLE,     // the value is the tableId of another table
     BDB_COLUMN_REFERENCE,	    // the value is the recordId of another table
-    BDB_COLUMN_COPY,            // the value has the properties from another column
 // the following columns are virtual and hold no data:
     BDB_COLUMN_STRING,		    // virtual column that points to CHAR columns
     BDB_COLUMN_VIRTUAL,		    // points to column in another table
+    BDB_COLUMN_TXT_LIST_CLONE,  // writes value from another column as TXT_LIST
 } BDB_colTypeT;
 
 /*
@@ -54,6 +59,9 @@ typedef struct {
     uint16_t minValue;
     uint16_t maxValue;
     uint16_t defaultVal;
+
+    uint8_t valueColumn; // FIXME: column for BDB_COLUMN_TXT_LIST_CLONE
+
     union {
 /* BDB_COLUMN_INTEGER:
  *
@@ -64,13 +72,11 @@ typedef struct {
  *
  * getValue:                returns actual value
  * setValue, changeValue:   act directly on the data value
- * writeValue:              right-aligned numerical value optionally with
- *                          leading 0
+ * writeValue:              right-aligned numerical value
  *
- * Parameters:  */
-        struct {
-            bool leading0;
-        };
+ * No parameters:  */
+
+        // no struct!
 
 /* BDB_COLUMN_PERCENTAGE:
  *
@@ -102,27 +108,8 @@ typedef struct {
  *
  * Parameters:  */
         struct {
-            int8_t intStep;
-        };
-
-
-/* BDB_COLUMN_INT_ZEROTXT:
- *
- * Numeric value, but a text string is displayed instead of 0
- *
- * Constraints:
- *      defaultVal, maxValue
- *      minValue MUST be 0 (default)
- *
- * getValue:                returns actual value
- * setValue, changeValue:   act directly on the data value
- * writeValue:              right-aligned numerical value, OR the text with
- *                          index .int0txt if the value == 0
- *
- * Parameters:  */
-        struct {
-            uint8_t int0txt;
-        };
+            int8_t step;
+        } intS;
 
 /* BDB_COLUMN_DECIMAL:
  *
@@ -140,14 +127,14 @@ typedef struct {
  *
  * Parameters:  */
         struct {
-            uint8_t decimalShift;   // left-shift of decimal point: >0 && <=5
-            uint8_t decStep;        // allows steps of 1, 2 or 5
-        };
+            uint8_t shift;      // left-shift of decimal point: >0 && <=5
+            uint8_t step;       // allows steps of 1, 2 or 5
+        } dec;
 
 /* BDB_COLUMN_RECORD_TYPE:
  *
  * Numeric value that indicates the record type for a table with a variable
- * record types
+ * record type
  *
  * Constraints:
  *      .maxValue   must be equal to the number of record types - 1
@@ -175,8 +162,8 @@ typedef struct {
  *
  * Parameters:  */
         struct { // TXT_LIST
-            const uint8_t* txtList;
-        };
+            const uint8_t* list;
+        } txt;
 
 /* BDB_COLUMN_CHAR:
  *
@@ -192,12 +179,36 @@ typedef struct {
  *
  * Parameters:  */
         struct {
-            const char* charSet;
-        };
+            const char* set;
+        } chr;
+
+/* BDB_COLUMN_CHILD_TABLE
+ *
+ * The value is the tableId of another table: creates a 1:1 unique relationship
+ *  between a record of this table and an entire other table
+ *
+ * All tables in the target range (as set by minValue, maxValue) MUST have the
+ * following two parameters set:
+ *      .parentTableId
+ *      .parentChildColumnId
+ * to the table, column of the current BDB_COLUMN_CHILD_TABLE
+ *
+ * Constraints:
+ *      defaultVal must not be set, it is set automatically
+ *      minValue, maxValue
+ *
+ * getValue:                returns tableId
+ * setValue, changeValue    the value is set automatically, these functions
+ *                              can not be used
+ * writeValue:              returns a string containing the childs number of
+ *                          records
+ *
+ * No Parameters:  */
+    // no struct
 
 /* BDB_COLUMN_REFERENCE:
  *
- * The value is the recordId of another table
+ * The value is the recordId in another table
  *
  * Constraints:
  *      defaultVal
@@ -209,15 +220,18 @@ typedef struct {
  * writeValue:              returns the string representation of the value in
  *                          .refTable, value (=recordId), .refColumn
  *
+ * Setting tableId to BDB_SELF_REFERENCE will reference another record in the
+ *  same table.
+ *
  * Parameters:  */
         struct {
-            uint8_t refTable;
-            uint8_t refColumn;  // column id in the target table
-        };
+            uint8_t tableId;
+            uint8_t columnId;  // column id in the target table
+        } ref;
 
-/* BDB_COLUMN_COPY:
+/* BDB_COLUMN_TXT_LIST_COPY:
  *
- * The value has the properties from another column
+ * The value uses the columnDef from a column in another table
  * (only) makes sense if the target table has variable record type
  *
  * Constraints:
@@ -225,20 +239,21 @@ typedef struct {
  *      maxValue must be the highest maxvalue of the referenced columns
  *
  * The target properties are determined by:
- *  tableId:    .refTable of BDB_COLUMN_REFERENCE .copyRefCol
- *  recordId:   value in BDB_COLUMN_REFERENCE .copyRefCol
- *  columnId:   .copyPropsCol
+ *  tableId:    .refTable of BDB_COLUMN_REFERENCE .copy.refCol
+ *  recordId:   value in BDB_COLUMN_REFERENCE .copy.refCol
+ *  columnId:   .copy.columnId
  *
  * getValue:                returns actual value
  * setValue, changeValue:   act directly on the data value
+ *                              BUT: use the maxValue from the target!
  * writeValue:              returns the string representation of value
  *                          according to the column properties of target
  *
  * Parameters:  */
         struct {
-            uint8_t copyRefCol;     // columnId of REFERENCE_COLUMN in the same table
-            uint8_t copyPropsCol;   // columnId of target column in referenced table
-        };
+            uint8_t refCol;     // columnId of REFERENCE_COLUMN in the same table
+            uint8_t columnId;   // columnId of target column in referenced table
+        } copy;
 
 /* BDB_COLUMN_STRING:
  *
@@ -255,9 +270,9 @@ typedef struct {
  *
  * Parameters:  */
         struct {
-            uint8_t strFirstChar;
-            uint8_t strLength;
-        };
+            uint8_t firstChar;
+            uint8_t length;
+        } str;
 
 /* BDB_COLUMN_VIRTUAL:
  *
@@ -278,9 +293,9 @@ typedef struct {
  *
  * Parameters:  */
         struct {
-            uint8_t virtRecordCol; // columnId of REFERENCE_COLUMN in the same table
-            uint8_t virtValueCol;  // columnId of target value in referenced table
-        };
+            uint8_t refCol; // columnId of REFERENCE_COLUMN in the same table
+            uint8_t valueCol;  // columnId of target value in referenced table
+        } virt;
     };
 } BDB_columnT;
 
@@ -317,6 +332,8 @@ typedef struct {
 typedef struct {
     uint8_t maxNumRecords;
     uint8_t numRecordDefs;
+    uint8_t headerFormat;
+    bool hasParent;
     const BDB_recordT* recordDefs;
 } BDB_tableT;
 

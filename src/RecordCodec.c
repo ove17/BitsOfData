@@ -14,10 +14,10 @@
 // returns  1 if there is no step, so no effect
 static inline uint8_t getStep(const BDB_columnT* colDef) {
     if (colDef->colType == BDB_COLUMN_DECIMAL) {
-        return colDef->decStep;
+        return colDef->dec.step;
     }
     if (colDef->colType == BDB_COLUMN_INT_STEP) {
-        return colDef->intStep;
+        return colDef->intS.step;
     }
     return 1;
 }

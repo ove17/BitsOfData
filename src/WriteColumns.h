@@ -69,7 +69,8 @@ void wc_writeInteger(uint16_t value,
  */
 void wc_writeDecimal(uint16_t value,
                      const uint8_t numDigits,
-                     const uint8_t decimalShift);
+                     const uint8_t decimalShift,
+                     const bool leading0);
 
 /*
  * Writes a character from a character set to the writebuffer at the current
@@ -80,17 +81,6 @@ void wc_writeDecimal(uint16_t value,
  */
 void wc_writeChar(const char charIndex,
                   const char* charSet);
-
-/*
- * If value > 0 it writes an integer value to the writeBuffer, as per
- *  wc_writeInteger with no leading zeroes.
- * If value == 0, it writes a string to the writebuffer, the string is left-
- *  aligned and if it does not fit in numDigits, it will be truncated on the right.
- * On exit, the cursor position is at the next index.
- */
-void wc_writeIntZeroTxt(uint16_t value,
-                        const uint8_t numDigits,
-                        const char* txt);
 
 /*
  * Writes length characters of a string to the writebuffer at the current

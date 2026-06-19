@@ -35,7 +35,8 @@ uint8_t rc_getRecordSize(const BDB_recordT* recordDef);
  * Returns true if the column is virtual, i.e. it holds no data.
  */
 static inline bool rc_isVirtualColumn(const BDB_columnT* columnDef) {
-    return columnDef->colType == BDB_COLUMN_VIRTUAL || columnDef->colType == BDB_COLUMN_STRING;
+    return columnDef->colType == BDB_COLUMN_VIRTUAL || columnDef->colType == BDB_COLUMN_STRING
+        || columnDef->colType == BDB_COLUMN_TXT_LIST_CLONE; //FIXME
 }
 
 /*

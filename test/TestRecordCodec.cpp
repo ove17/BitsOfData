@@ -97,7 +97,7 @@ TEST(RecordCodec, getRecordSizeOn4plus5bitsReturns2) {
 
 TEST(RecordCodec, getRecordSizeOnDecimalRecordWithStepIsReduced) {
     static const BDB_columnT columns[] = {
-        {.colType = BDB_COLUMN_DECIMAL, .minValue = 5, .maxValue = 1280, .decStep = 5},
+        {.colType = BDB_COLUMN_DECIMAL, .minValue = 5, .maxValue = 1280, .dec = {.step = 5}},
     };
     static const BDB_recordT recordDef = {
         .numColumns = 1,
@@ -110,7 +110,7 @@ TEST(RecordCodec, getRecordSizeOnDecimalRecordWithStepIsReduced) {
 
 TEST(RecordCodec, getRecordSizeOnIntStepRecordIsReduced) {
     static const BDB_columnT columns[] = {
-        {.colType = BDB_COLUMN_INT_STEP, .minValue = 50, .maxValue = 4130, .intStep = 16},
+        {.colType = BDB_COLUMN_INT_STEP, .minValue = 50, .maxValue = 4130, .intS = {.step = 16}},
     };
     static const BDB_recordT recordDef = {
         .numColumns = 1,
@@ -279,7 +279,7 @@ TEST(RecordCodec, encodingDecimalColumnsThenDecodingReturnsSameValue) {
     const uint16_t recordData[] = {995, 170};
     uint8_t rawRecord[3] = { 0 };
     static const BDB_columnT columns[] = {
-        {.colType = BDB_COLUMN_DECIMAL, .minValue = 5, .maxValue = 1280, .decStep = 5},
+        {.colType = BDB_COLUMN_DECIMAL, .minValue = 5, .maxValue = 1280, .dec = {.step = 5}},
         {.maxValue = 255},
     };
     static const BDB_recordT recordDef = {
@@ -303,7 +303,7 @@ TEST(RecordCodec, encodingIntStepColumnsThenDecodingReturnsSameValue) {
     const uint16_t recordData[] = {1000, 170};
     uint8_t rawRecord[3] = { 0 };
     static const BDB_columnT columns[] = {
-        {.colType = BDB_COLUMN_INT_STEP, .minValue = 8, .maxValue = 2040, .intStep = 8},
+        {.colType = BDB_COLUMN_INT_STEP, .minValue = 8, .maxValue = 2040, .intS = {.step = 8}},
         {.maxValue = 255},
     };
     static const BDB_recordT recordDef = {

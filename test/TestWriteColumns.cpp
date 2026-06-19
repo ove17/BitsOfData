@@ -65,79 +65,47 @@ TEST(WriteColumns, writeIntegerWithLeading0_FillsWith0s) {
 
 TEST(WriteColumns, writeDecimalIncreasesCursorPosition) {
     wc_setCursorPosition(8);
-    wc_writeDecimal(0, 5, 1);
+    wc_writeDecimal(0, 5, 1, false);
     BYTES_EQUAL(8 + 5, wc_getCursorPosition());
 }
 
 
 TEST(WriteColumns, writeDecimalWrites0pt0ifValueIs0) {
-    wc_writeDecimal(0, 5, 1);
+    wc_writeDecimal(0, 5, 1, false);
     STRNCMP_EQUAL("  0.0\0", wc_getWriteBuffer(), 5);
 }
 
 
 TEST(WriteColumns, writeDecimalShiftedBy1_IntroducesPoint) {
-    wc_writeDecimal(123, 5, 1);
+    wc_writeDecimal(123, 5, 1, false);
     STRNCMP_EQUAL(" 12.3\0", wc_getWriteBuffer(), 5);
 }
 
 
+TEST(WriteColumns, writeDecimalWithLeading0) {
+    wc_writeDecimal(123, 5, 1, true);
+    STRNCMP_EQUAL("012.3\0", wc_getWriteBuffer(), 5);
+}
+
+
 TEST(WriteColumns, writeDecimalShiftedBy3_IntroducesZeroAndPoint) {
-    wc_writeDecimal(123, 6, 3);
+    wc_writeDecimal(123, 6, 3, false);
     STRNCMP_EQUAL(" 0.123\0", wc_getWriteBuffer(), 5);
 
 }
 
 
 TEST(WriteColumns, writeDecimalShiftedBy3_ToLessSpaceThanNeededLeavesOut0) {
-    wc_writeDecimal(123, 4, 3);
+    wc_writeDecimal(123, 4, 3, false);
     STRNCMP_EQUAL(".123\0", wc_getWriteBuffer(), 5);
 
 }
 
 
 TEST(WriteColumns, writeDecimalShiftedBy4_IntroducesZeroPointZero) {
-    wc_writeDecimal(123, 7, 4);
+    wc_writeDecimal(123, 7, 4, false);
     STRNCMP_EQUAL(" 0.0123\0", wc_getWriteBuffer(), 5);
 
-}
-
-
-// wc_writeIntZeroTxt
-
-
-TEST(WriteColumns, writeIntZeroTxtIncreasesCursorPosition) {
-    wc_setCursorPosition(2);
-    wc_writeIntZeroTxt(1, 3, "txt");
-    BYTES_EQUAL(2 + 3, wc_getCursorPosition());
-}
-
-
-TEST(WriteColumns, writeIntZeroTxtWritesIntIfValueIs1) {
-    const char* txt = "no\0";
-    wc_writeIntZeroTxt(1, 3, txt);
-    STRNCMP_EQUAL("  1\0", wc_getWriteBuffer(), 4);
-}
-
-
-TEST(WriteColumns, writeIntZeroTxtWritesStrIfValueIs0) {
-    const char* txt = "no\0";
-    wc_writeIntZeroTxt(0, 2, txt);
-    STRNCMP_EQUAL("no\0", wc_getWriteBuffer(), 3);
-}
-
-
-TEST(WriteColumns, writeIntZeroTxtIsTruncated) {
-    const char* txt = "nono\0";
-    wc_writeIntZeroTxt(0, 3, txt);
-    STRNCMP_EQUAL("non\0", wc_getWriteBuffer(), 4);
-}
-
-
-TEST(WriteColumns, writeIntZeroTxtIsLeftAligned) {
-    const char* txt = "no\0";
-    wc_writeIntZeroTxt(0, 3, txt);
-    STRNCMP_EQUAL("no \0", wc_getWriteBuffer(), 4);
 }
 
 

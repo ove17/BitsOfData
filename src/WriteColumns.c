@@ -1,4 +1,5 @@
 // WriteColumns.c
+// TODO: ColumnWriter.c
 
 
 #include <stdbool.h>
@@ -74,8 +75,10 @@ void wc_writeInteger(uint16_t value,
 // writes in reverse order, truncates if value does not fit in numDigits
 void wc_writeDecimal(uint16_t value,
                      const uint8_t numDigits,
-                     const uint8_t decimalShift) {
+                     const uint8_t decimalShift,
+                     const bool leading0) {
     wc_setCursorPosition(CursorPosition + numDigits);
+    char fillChar = '0';
     for (uint8_t i = 0; i < numDigits; i++) {
         const uint8_t position = CursorPosition - i - 1;
         if (decimalShift == i) {
@@ -86,7 +89,9 @@ void wc_writeDecimal(uint16_t value,
             const uint8_t digit = (uint8_t)(value % 10);
             StringBuffer[position] = '0' + digit;
         } else {
-            char fillChar = (i > decimalShift + 1) ? ' ' : '0';
+            if (i > decimalShift + 1) {
+                fillChar = leading0 ? '0' : ' ';
+            }
             StringBuffer[position] = fillChar;
         }
         value /= 10;
@@ -102,17 +107,6 @@ void wc_writeTxt(const char* txt,
         StringBuffer[CursorPosition] = txtFinished ? ' ' : txt[i];
         increaseCursorPosition();
     }
-}
-
-
-void wc_writeIntZeroTxt(uint16_t value,
-                        const uint8_t numDigits,
-                        const char* txt) {
-    if (value == 0) {
-        wc_writeTxt(txt, numDigits);
-        return;
-    }
-    wc_writeInteger(value, numDigits, false);
 }
 
 

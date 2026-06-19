@@ -34,7 +34,7 @@ static void assertIntStepColumnIsValid(const BDB_columnT* columnDef) {
     assert(columnDef->maxValue > columnDef->minValue);
     assert(columnDef->defaultVal >= columnDef->minValue);
     assert(columnDef->defaultVal <= columnDef->maxValue);
-    const uint8_t step = columnDef->intStep;
+    const uint8_t step = columnDef->intS.step;
     assert(step > 1);
     // step must not cause remainder:
     assert((columnDef->maxValue - columnDef->minValue) % step == 0);
@@ -42,21 +42,13 @@ static void assertIntStepColumnIsValid(const BDB_columnT* columnDef) {
 }
 
 
-static void assertIntZeroTxtColumnIsValid(const BDB_columnT* columnDef) {
-    assert(columnDef->minValue == 0);
-    assert(columnDef->maxValue > 0);
-    assert(columnDef->defaultVal <= columnDef->maxValue);
-    // NOTE: assertion GetTxtPtr != NULL must be in BitsOfData.c
-}
-
-
 static void assertDecimalColumnIsValid(const BDB_columnT* columnDef) {
     assert(columnDef->maxValue > columnDef->minValue);
     assert(columnDef->defaultVal >= columnDef->minValue);
     assert(columnDef->defaultVal <= columnDef->maxValue);
-    assert(columnDef->decimalShift > 0);
-    assert(columnDef->decimalShift <= 5); // arbitrary? or practical?
-    const uint8_t step = columnDef->decStep;
+    assert(columnDef->dec.shift > 0);
+    assert(columnDef->dec.shift <= 5); // arbitrary? or practical?
+    const uint8_t step = columnDef->dec.step;
     assert(step == 1 || step == 2 || step == 5); // NOTE: step == 0 would cause div/0
     // step must not cause remainder:
     assert((columnDef->maxValue - columnDef->minValue) % step == 0);
@@ -65,12 +57,11 @@ static void assertDecimalColumnIsValid(const BDB_columnT* columnDef) {
 
 
 static void assertRecordTypeColumnIsValid(const BDB_tableT* tableDef,
-                                          const BDB_columnT* columnDef,
-                                          const uint8_t columnId) {
+                                          const BDB_columnT* columnDef) {
     assert(columnDef->minValue == 0);
     assert(columnDef->defaultVal == 0);
     assert(columnDef->maxValue > 0);
-    assert(columnId == 0);
+    assert(Col == 0);
     const uint8_t numRecDefs = tableDef->numRecordDefs;
     assert(columnDef->maxValue == numRecDefs - 1);
     assert(numRecDefs > 1);
@@ -79,8 +70,8 @@ static void assertRecordTypeColumnIsValid(const BDB_tableT* tableDef,
 
 static void assertCharColumnIsValid(const BDB_columnT* columnDef) {
     const uint8_t maxCharIndex = (uint8_t)columnDef->maxValue;
-    assert(columnDef->charSet != NULL);
-    assert(columnDef->charSet[maxCharIndex + 1] == '\0');
+    assert(columnDef->chr.set != NULL);
+    assert(columnDef->chr.set[maxCharIndex + 1] == '\0');
     assert(columnDef->minValue == 0);
     assert(columnDef->defaultVal == 0);
     assert(columnDef->maxValue > 0);
@@ -101,18 +92,38 @@ static uint8_t getMinNumColumns(const BDB_tableT* tableDef) {
 }
 
 
+static void assertChildTableColumnIsValid(const BDB_dbaseDefT* dbaseDef,
+                                          const BDB_tableT* tableDef,
+                                          const BDB_columnT* columnDef) {
+    assert(tableDef->numRecordDefs == 1); // child table is not allowed in variable record type table
+    assert(columnDef->maxValue < dbaseDef->numTables);
+    assert(columnDef->minValue < columnDef->maxValue);
+    assert(columnDef->defaultVal == 0); // no default allowed, automatic assignment
+    assert(tableDef->maxNumRecords == columnDef->maxValue - columnDef->minValue + 1);
+    for (uint8_t tableId = (uint8_t)columnDef->minValue; tableId <= (uint8_t)columnDef->maxValue; tableId++) {
+        assert(dbaseDef->tables[tableId].hasParent == true);
+    }
+}
+
+
 static void assertReferenceColumnIsValid(const BDB_dbaseDefT* dbaseDef,
+                                         const BDB_tableT* tableDef,
                                          const BDB_columnT* columnDef) {
     assert(columnDef->minValue == 0);
     assert(columnDef->defaultVal == 0);
     assert(columnDef->maxValue > 0);
-    const uint8_t refTableId = columnDef->refTable;
-    assert(refTableId < dbaseDef->numTables);
-// make sure the reference column exists in all target record types:
-    const BDB_tableT* refTableDef = &dbaseDef->tables[refTableId];
-    const uint8_t minNumColumns = getMinNumColumns(refTableDef);
-    assert(columnDef->refColumn < minNumColumns);
-    const uint8_t maxNumRecords = dbaseDef->tables[refTableId].maxNumRecords;
+    const uint8_t refTableId = columnDef->ref.tableId;
+    uint8_t maxNumRecords = 0;
+    if (refTableId == BDB_SELF_REFERENCE) {
+        maxNumRecords = tableDef->maxNumRecords;
+    } else {
+        assert(refTableId < dbaseDef->numTables);
+        // make sure the reference column exists in all target record types:
+        //    const BDB_tableT* refTableDef = &dbaseDef->tables[refTableId];
+        //    const uint8_t minNumColumns = getMinNumColumns(refTableDef);
+        //    assert(columnDef->ref.columnId < minNumColumns); TODO: wat moeten we hiermee?
+        maxNumRecords = dbaseDef->tables[refTableId].maxNumRecords;
+    }
     assert(columnDef->maxValue == maxNumRecords - 1);
 }
 
@@ -148,16 +159,16 @@ static void assertCopyColumnIsValid(const BDB_dbaseDefT* dbaseDef,
     assert(columnDef->defaultVal == 0);
     assert(columnDef->maxValue > 0);
 // refCol must be a REFERENCE column in the same table:
-    const uint8_t refColId = columnDef->copyRefCol;
+    const uint8_t refColId = columnDef->copy.refCol;
     assert(isReferenceColumn(recordDef, refColId));
 // copyPropsCol must be < minNumColumns in the REFERENCED refTable
     const BDB_columnT* refColDef = &recordDef->columns[refColId];
-    const uint8_t refTableId = refColDef->refTable;
+    const uint8_t refTableId = refColDef->ref.tableId;
     const BDB_tableT* refTableDef = &dbaseDef->tables[refTableId];
     uint8_t minNumColumns = getMinNumColumns(refTableDef);
-    assert(columnDef->copyPropsCol < minNumColumns);
+    assert(columnDef->copy.columnId < minNumColumns);
 // maxValue must be highest maxValue in the target column of each variable record def:
-    const uint8_t highestMaxValue = getHighestMaxValue(refTableDef, columnDef->copyPropsCol);
+    const uint8_t highestMaxValue = getHighestMaxValue(refTableDef, columnDef->copy.columnId);
     assert(columnDef->maxValue == highestMaxValue);
 }
 
@@ -169,14 +180,14 @@ static void assertVirtualColumnIsValid(const BDB_dbaseDefT* dbaseDef,
     assert(columnDef->defaultVal == 0);
     assert(columnDef->maxValue == 0);
 // refCol must be a REFERENCE column in the same table:
-    const uint8_t refColId = columnDef->virtRecordCol;
+    const uint8_t refColId = columnDef->virt.refCol;
     assert(isReferenceColumn(recordDef, refColId));
 // virtualColumn must not point to a virtualColumn:
     const BDB_columnT* refColDef = &recordDef->columns[refColId];
-    const uint8_t refTableId = refColDef->refTable;
+    const uint8_t refTableId = refColDef->ref.tableId;
     const BDB_tableT* refTableDef = &dbaseDef->tables[refTableId];
     const BDB_recordT* refRrecordDef = &refTableDef->recordDefs[0];
-    const uint8_t virtColumnId = columnDef->virtValueCol;
+    const uint8_t virtColumnId = columnDef->virt.valueCol;
     const BDB_columnT* virtColDef = &refRrecordDef->columns[virtColumnId];
     const BDB_colTypeT virtColumnType = virtColDef->colType;
     assert(virtColumnType != BDB_COLUMN_VIRTUAL);
@@ -188,8 +199,8 @@ static void assertStringColumnIsValid(const BDB_recordT* recordDef,
     assert(columnDef->minValue == 0);
     assert(columnDef->defaultVal == 0);
     assert(columnDef->maxValue == 0);
-    const uint8_t firstCol = columnDef->strFirstChar;
-    const uint8_t lastCol = firstCol + columnDef->strLength;
+    const uint8_t firstCol = columnDef->str.firstChar;
+    const uint8_t lastCol = firstCol + columnDef->str.length;
     for (uint8_t col = firstCol; col < lastCol; col++) {
         const BDB_columnT* charColumnDef = &recordDef->columns[col];
         assert(charColumnDef->colType == BDB_COLUMN_CHAR);
@@ -201,7 +212,7 @@ static void assertTxtListColumnIsValid(const BDB_columnT* columnDef) {
     assert(columnDef->minValue == 0);
     assert(columnDef->maxValue > 0);
     assert(columnDef->defaultVal <= columnDef->maxValue);
-    assert(columnDef->txtList != NULL);
+    assert(columnDef->txt.list != NULL);
 }
 
 
@@ -227,29 +238,29 @@ void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef) {
                         assertIntStepColumnIsValid(columnDef);
                         ASSERT_VALID(!virtualColumnPresent);
                         break;
-                    case BDB_COLUMN_INT_ZEROTXT :
-                        assertIntZeroTxtColumnIsValid(columnDef);
-                        ASSERT_VALID(!virtualColumnPresent);
-                        break;
                     case BDB_COLUMN_DECIMAL :
                         assertDecimalColumnIsValid(columnDef);
                         ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_RECORD_TYPE :
-                        assertRecordTypeColumnIsValid(tableDef, columnDef, Col);
+                        assertRecordTypeColumnIsValid(tableDef, columnDef);
+                        ASSERT_VALID(!virtualColumnPresent);
+                        break;
+                    case BDB_COLUMN_CHILD_TABLE :
+                        assertChildTableColumnIsValid(dbaseDef, tableDef, columnDef);
                         ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_REFERENCE :
-                        assertReferenceColumnIsValid(dbaseDef, columnDef);
+                        assertReferenceColumnIsValid(dbaseDef, tableDef, columnDef);
                         ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_VIRTUAL :
                         assertVirtualColumnIsValid(dbaseDef, recordDef, columnDef);
                         virtualColumnPresent = true;
                         break;
-                    case BDB_COLUMN_COPY :
+                    case BDB_COLUMN_TXT_LIST_COPY :
                         assertCopyColumnIsValid(dbaseDef, recordDef, columnDef);
-                        virtualColumnPresent = true;
+                        ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_CHAR :
                         assertCharColumnIsValid(columnDef);
@@ -262,6 +273,10 @@ void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef) {
                     case BDB_COLUMN_TXT_LIST :
                         assertTxtListColumnIsValid(columnDef);
                         ASSERT_VALID(!virtualColumnPresent);
+                        break;
+                    case BDB_COLUMN_TXT_LIST_CLONE :
+//                        assertTxtListColumnIsValid(columnDef); // FIXME
+                        virtualColumnPresent = true;
                         break;
                     default :
                         assert(0 && "Invalid columnType");

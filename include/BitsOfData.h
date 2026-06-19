@@ -225,6 +225,24 @@ uint8_t BDB_importTable(const uint8_t tableId,
 						const uint8_t numRecords);
 
 
+// parent/child:
+// =============
+
+
+/*
+ * Returns the table id of the parent of tableId. Calling this function on a
+ * table that has no parent will result in an assertion failure.
+ */
+uint8_t BDB_getParentTable(const uint8_t tableId);
+
+
+/*
+ * Returns the record id of the parent of tableId. Calling this function on a
+ * table that has no parent will result in an assertion failure.
+ */
+uint8_t BDB_getParentRecord(const uint8_t tableId);
+
+
 // presentation:
 // =============
 
@@ -261,16 +279,45 @@ uint8_t BDB_writeValue(const uint8_t tableId,
 					   const uint8_t startPosition);
 
 /*
- * Writes the string representation of a database record into the write buffer.
+ * Writes the string representation of a database record to the write buffer.
  *
  * This operation overwrites the entire write buffer. Any previous content is
  *  discarded. The resulting string is padded with spaces, if necessary, to
  *  fill the entire buffer.
  *
- * The output format is defined by .txtFormat in BDB_recordT (see
+ * The output format is defined by BDB_recordT.txtFormat in BDB_recordT (see
  *  BitsOfDataTypes.h).
  */
-uint8_t BDB_writeRecord(const uint8_t tableId,
-						const uint8_t recordId);
+void BDB_writeRecord(const uint8_t tableId,
+					 const uint8_t recordId);
+
+
+/*
+ * Writes the string representation of a database table header to the write buffer.
+ *
+ * This operation overwrites the entire write buffer. Any previous content is
+ *  discarded. The resulting string is padded with spaces, if necessary, to
+ *  fill the entire buffer.
+ *
+ * The output format is defined by BDB_tableT.headerFormat in BDB_recordT (see
+ *  BitsOfDataTypes.h).
+ *
+ * The recordId is an input, so that current record properties can be shown in
+ *  the header, e.g. recordId
+ */
+void BDB_writeHeader(const uint8_t tableId,
+					 const uint8_t recordId);
+
+
+/*
+ * Writes the string representation of a database record into the write buffer.
+ *
+ * This function works identically to writeRecord, but instead of getting the
+ *  format from the database schema, the user can provide a custom format. The
+ *  caller is responsible for providing a \0 terminated string.
+ */
+void BDB_writeRecordWithFormat(const uint8_t tableId,
+							   const uint8_t recordId,
+							   const char* txtFormat);
 
 #endif
