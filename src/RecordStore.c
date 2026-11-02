@@ -367,6 +367,7 @@ uint8_t rs_createTable(const uint8_t maxNumRecords,
         }
     }
     assert(0 && "too many tableIds");
+    return 0;
 }
 
 

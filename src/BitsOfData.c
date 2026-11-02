@@ -1,5 +1,9 @@
 /*
  * BitsOfData.c
+ *
+ * TODO: separate dbaseEngine.c (with recordBuffer, etc)
+ * TODO: separate parser & higher level write functions to RecordWriter.c or
+ *          even a separate parser-only module if possible
  */
 
 #include <stdint.h>
@@ -29,6 +33,7 @@ typedef struct {
 typedef struct {
     bool leading0;
     bool offset1;
+    bool hex;
 } PropT;
 
 
@@ -46,7 +51,7 @@ extern void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef);
 static const BDB_dbaseDefT* DbaseDef = NULL;
 static recordBufferT* RecordBuffers = NULL;
 static uint8_t* RawRecordBuffer = NULL;
-static uint8_t* ParentRecordList = NULL;
+static uint8_t* ParentRecordList = NULL; // There can only be 1 db table with children!
 static uint8_t NumChildColumns = 0;
 static uint8_t ParentTableId = NOT_SET;
 static uint8_t ParentChildColumnId = NOT_SET;
@@ -97,25 +102,26 @@ static void fillRecordBuffer(const uint8_t tableId,
 }
 
 
-static const BDB_recordT* getRecordDefFromBuffer(const uint8_t tableId,
-                                                 const uint8_t recordId) {
-    fillRecordBuffer(tableId, recordId);
+static const BDB_recordT* getRecordDef(const uint8_t tableId,
+                                       uint8_t recordType) {
     const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
-    const uint8_t numRecordDefs = tableDef->numRecordDefs;
-    uint8_t recordType = 0;
-    if (numRecordDefs > 1) {
-        recordType = (uint8_t)RecordBuffers[tableId].columns[0];
+    if (!BDB_isRecordTypeVariable(tableId)) {
+        recordType = 0;
     }
     return &tableDef->recordDefs[recordType];
 }
 
 
+static const BDB_recordT* getRecordDefFromBuffer(const uint8_t tableId,
+                                                 const uint8_t recordId) {
+    fillRecordBuffer(tableId, recordId);
+    return getRecordDef(tableId, (uint8_t)RecordBuffers[tableId].columns[0]);
+}
+
+
 static const BDB_recordT* getRecordDefFromData(const uint8_t tableId,
                                                const uint16_t* data) {
-    const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
-    const uint8_t numRecordDefs = tableDef->numRecordDefs;
-    uint8_t recordType = (uint8_t)((numRecordDefs > 1) ? (uint8_t)data[0] : 0);
-    return &tableDef->recordDefs[recordType];
+    return getRecordDef(tableId, (uint8_t)data[0]);
 }
 
 
@@ -184,8 +190,7 @@ static void allocateParentRecordList(void) {
     const uint8_t numTables = DbaseDef->numTables;
     for (uint8_t tableId = 0; tableId < numTables; tableId++) {
         const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
-        const uint8_t numRecordDefs = tableDef->numRecordDefs;
-        if (numRecordDefs > 1) {
+        if(BDB_isRecordTypeVariable(tableId)) {
             continue; // record with variable type cannot have children
         }
         const uint8_t numColumns = getMaxNumColumns(tableId);
@@ -239,8 +244,7 @@ static uint16_t getMaxValue(const uint8_t tableId,
         } else {
             return rs_getNumRecords(columnDef->ref.tableId) - 1;
         }
-    } else
-    if (columnDef->colType == BDB_COLUMN_TXT_LIST_COPY) {
+    } else if (columnDef->colType == BDB_COLUMN_TXT_LIST_COPY) {
         if (recordId == 0xFF) return 4; // FIXME ugly hack:
                             // uses max value for import of AMDB - MUST be
                             // read from referenced table
@@ -313,6 +317,13 @@ static void setRecordToDefaultValues(const uint8_t tableId,
 }
 
 
+static void setVariableRecordToDefaultValues(const uint8_t tableId,
+                                             const uint8_t recordId,
+                                             const BDB_recordT* recordDef) {
+    setColumnsToDefaultValue(tableId, recordId, 1, recordDef);
+}
+
+
 static void createFirstRecordInEveryTable(void) {
     uint8_t numTables = DbaseDef->numTables;
     for (uint8_t tableId = 0; tableId < numTables; tableId++) {
@@ -327,6 +338,7 @@ bool BDB_openDataBase(const BDB_dbaseDefT* dbaseDef,
                       BDB_txtHandlerFunction txtHandler) {
     DbaseDef = dbaseDef;
     GetTxtPtr = txtHandler;
+// FIXME: remove the #ifndef and replace with externally linked function
 #ifndef NDEBUG
     assertDbaseDefIsValid(DbaseDef);
 #endif
@@ -500,7 +512,8 @@ static bool shiftRecordReferencesUp(const uint8_t refTableId,
 
 bool BDB_canRecordBeDeleted(const uint8_t tableId,
                             const uint8_t recordId) {
-    return (rs_getNumRecords(tableId) > 1 && !isRecordReferenced(tableId, recordId));
+    return (rs_getNumRecords(tableId) > 1
+            && !isRecordReferenced(tableId, recordId));
 }
 
 
@@ -537,6 +550,11 @@ bool BDB_insertRecordAfter(const int8_t tableId,
 }
 
 
+bool BDB_isRecordTypeVariable(const uint8_t tableId) {
+    return DbaseDef->tables[tableId].numRecordDefs > 1;
+}
+
+
 // returns false if a column is DECIMAL and its value is invalid
 static bool validateDecimalValue(const BDB_columnT* columnDef,
                                  const uint16_t value) {
@@ -561,7 +579,7 @@ static bool validateRecord(const uint8_t tableId,
     for (uint8_t col = 0; col < numColumns; col++) {
         const BDB_columnT* columnDef = getColumnDef(recordDef, col);
         if (rc_isVirtualColumn(columnDef)) continue;
-        if (       data[col] < columnDef->minValue
+        if (data[col] < columnDef->minValue
                 || data[col] > getMaxValue(tableId, recordId, columnDef)
                 || !validateDecimalValue(columnDef, data[col])
                 || !validateIntStepValue(columnDef, data[col])) {
@@ -608,7 +626,7 @@ bool BDB_setRecord(const uint8_t tableId,
 
 
 const uint16_t* BDB_getRecord(const uint8_t tableId,
-                        const uint8_t recordId) {
+                              const uint8_t recordId) {
     fillRecordBuffer(tableId, recordId);
     return RecordBuffers[tableId].columns;
 }
@@ -668,21 +686,13 @@ uint16_t BDB_getValue(const uint8_t tableId,
 }
 
 
-static void setVariableRecordToDefaultValues(const uint8_t tableId,
-                                             const uint8_t recordId,
-                                             const BDB_recordT* recordDef) {
-    setColumnsToDefaultValue(tableId, recordId, 1, recordDef);
-}
-
-
 static void setValue(const uint8_t tableId,
                      const uint8_t recordId,
                      const uint8_t columnId,
                      const uint16_t value) {
     RecordBuffers[tableId].columns[columnId] = value;
-    const BDB_tableT* tableDef = &DbaseDef->tables[tableId];
-    if (columnId == 0 && tableDef->numRecordDefs > 1) { // changing record type:
-        const BDB_recordT* recordDef = &tableDef->recordDefs[value];
+    if (columnId == 0 && BDB_isRecordTypeVariable(tableId)) { // changing record type:
+        const BDB_recordT* recordDef = &DbaseDef->tables[tableId].recordDefs[value];
         setVariableRecordToDefaultValues(tableId, recordId, recordDef);
     }
     RecordBuffers[tableId].isModified = true;
@@ -741,7 +751,7 @@ uint8_t BDB_importTable(const uint8_t tableId,
                         const uint16_t* data,
                         const uint8_t numRecords) {
     uint8_t maxNumRecords = DbaseDef->tables[tableId].maxNumRecords;
-    assert(numRecords <= maxNumRecords);    // FIXME: this could become runtime error!
+    assert(numRecords <= maxNumRecords); // FIXME: could become runtime error!
     rs_deleteAllRecords(tableId);
     clearRecordBuffer(tableId);
     uint16_t dataId = 0;
@@ -762,7 +772,7 @@ uint8_t BDB_importTable(const uint8_t tableId,
 // parent/child
 
 
-uint8_t BDB_getParentTable(const uint8_t tableId) {
+uint8_t BDB_getParentTable(void) {
     assert(ParentTableId != NOT_SET && ParentChildColumnId != NOT_SET);
     return ParentTableId;
 }
@@ -774,6 +784,12 @@ uint8_t BDB_getParentRecord(const uint8_t tableId) {
     const BDB_columnT* columnDef = getColumnDef(recordDef, ParentChildColumnId);
     const uint8_t minValue = (uint8_t)columnDef->minValue;
     return ParentRecordList[tableId - minValue];
+}
+
+
+uint8_t BDB_getChildTable(const uint8_t recordId) {
+    assert(ParentTableId != NOT_SET && ParentChildColumnId != NOT_SET);
+    return (uint8_t)BDB_getValue(ParentTableId, recordId, ParentChildColumnId);
 }
 
 
@@ -802,11 +818,8 @@ static uint8_t getMaxLengthFromTxtList(const uint8_t* const txtList,
 
 
 static bool isRecordTypeColumn(const uint8_t tableId,
-                               const uint8_t recordId,
                                const uint8_t columnId){
-    if (columnId) return false;
-    const BDB_recordT* recordDef = getRecordDefFromBuffer(tableId, recordId);
-    return recordDef->columns[0].colType == BDB_COLUMN_RECORD_TYPE;
+    return (columnId == 0 && BDB_isRecordTypeVariable(tableId));
 }
 
 
@@ -824,8 +837,12 @@ static void writeValue(const uint8_t tableId,
         case BDB_COLUMN_INTEGER : {
             const bool offset1 = properties.offset1;
             const uint16_t maxValue = columnDef->maxValue;
-            const uint8_t numDigits = mu_getNumDigits(maxValue);
-            wc_writeInteger(value + offset1, numDigits, leading0);
+            if (properties.hex) {
+                wc_writeHex(value, maxValue);
+            } else {
+                const uint8_t numDigits = mu_getNumDigits(maxValue);
+                wc_writeInteger(value + offset1, numDigits, leading0);
+            }
             break;
         }
         case BDB_COLUMN_PERCENTAGE : {
@@ -886,8 +903,7 @@ static void writeValue(const uint8_t tableId,
             const uint8_t refRecordId = (uint8_t)value;
             const uint8_t refColumnId = columnDef->ref.columnId;
             if (refTableId == BDB_SELF_REFERENCE
-                    || isRecordTypeColumn(refTableId, refRecordId, refColumnId)) {
-                // write the record number:
+                    || isRecordTypeColumn(refTableId, refColumnId)) {
                 const uint16_t maxValue = columnDef->maxValue + 1;
                 uint8_t numDigits = mu_getNumDigits(maxValue);
                 wc_writeInteger(value + offset1,  numDigits, leading0);
@@ -934,7 +950,7 @@ uint8_t BDB_writeValue(const uint8_t tableId,
                        const uint8_t columnId,
                        const uint8_t position) {
     wc_setCursorPosition(position);
-    PropT properties =  {.leading0 = false, .offset1 = false};
+    PropT properties =  {.leading0 = false, .offset1 = false, .hex = false};
     writeValue(tableId, recordId, columnId, properties);
     return wc_getCursorPosition();
 }
@@ -1004,7 +1020,7 @@ void BDB_writeRecordWithFormat(const uint8_t tableId,
     mu_operatorT operator = MU_NO_OPERATOR;
     uint8_t number = 0;
     uint16_t value = 0;
-    PropT properties = {.leading0 = false, .offset1 = false};
+    PropT properties = {.leading0 = false, .offset1 = false, .hex = false};
     uint8_t state = PLAIN_TEXT;
     for (uint8_t i = 0; txtFormat[i] != '\0'; i++) {
         const char chr = txtFormat[i];
@@ -1015,6 +1031,7 @@ void BDB_writeRecordWithFormat(const uint8_t tableId,
                     number = 0;
                     properties.leading0 = false;
                     properties.offset1 = false;
+                    properties.hex = false;
                     state = START_TAG;
                 } else {
                     wc_writeTxt(&chr, 1);
@@ -1024,6 +1041,9 @@ void BDB_writeRecordWithFormat(const uint8_t tableId,
 
             case START_TAG : {
                 switch (chr) {
+                    case '&' :
+                        state = COLUMN_ID_TAG;
+                        break;
                     case '?' :
                         assert(txtFormat[i + 1] == '&');
                         i++; // skip '&'
@@ -1048,8 +1068,9 @@ void BDB_writeRecordWithFormat(const uint8_t tableId,
                         properties.leading0 = true;
                         // remain in START_TAG state!
                         break;
-                    case '&' :
-                        state = COLUMN_ID_TAG;
+                    case 'x' :
+                        properties.hex = true;
+                        // remain in START_TAG state!
                         break;
                     default :
                         assert(0 && "Invalid start character in tag");
@@ -1062,8 +1083,7 @@ void BDB_writeRecordWithFormat(const uint8_t tableId,
                 if (chr == '}' ) {
                     writeValue(tableId, recordId, number, properties);
                     state = PLAIN_TEXT;
-                } else
-                if (chr == '+') {
+                } else if (chr == '+') {
                     properties.offset1 = true;
                 } else {
                     number = updateNumber(number, chr);
@@ -1096,16 +1116,6 @@ void BDB_writeRecordWithFormat(const uint8_t tableId,
                 }
                 break;
 
-            case ELSE_TAG :
-                assert(chr == '}' && "invalid character in else tag");
-                state = condition ? SKIP_TO_ENDIF : PLAIN_TEXT;
-                break;
-
-            case ENDIF_TAG :
-                assert(chr == '}' && "invalid character in endif tag");
-                state = PLAIN_TEXT;
-                break;
-
             case IF_TAG_COLUMN_ID :
                 if (chr == '=' || chr == '>' || chr == '<'  || chr == '!' ) {
                     operator = tu_getOperator(&txtFormat[i]);
@@ -1121,11 +1131,9 @@ void BDB_writeRecordWithFormat(const uint8_t tableId,
             case IF_TAG_RIGHT_HAND_SIDE :
                 if (chr == '$') {
                     state = IF_LITERAL_VALUE;
-                } else
-                if (chr == '#') {
+                } else if (chr == '#') {
                     state = IF_RECORD_ID;
-                } else
-                if (chr == '&') {
+                } else if (chr == '&') {
                     state = IF_OTHER_COLUMN;
                 } else {
                     assert(0 && "invalid character in if tag RHS");
@@ -1149,8 +1157,7 @@ void BDB_writeRecordWithFormat(const uint8_t tableId,
                     }
                     condition = mu_evalCondition(value, operator, rhs);
                     state = condition ? PLAIN_TEXT : SKIP_TO_ELSE;
-                } else
-                if (chr == '+') {
+                } else if (chr == '+') {
                     properties.offset1 = true;
                 } else {
                     assert(0 && "invalid character in if record tag");
@@ -1183,10 +1190,19 @@ void BDB_writeRecordWithFormat(const uint8_t tableId,
                 }
                 break;
 
+            case ELSE_TAG :
+                assert(chr == '}' && "invalid character in else tag");
+                state = condition ? SKIP_TO_ENDIF : PLAIN_TEXT;
+                break;
+
+            case ENDIF_TAG :
+                assert(chr == '}' && "invalid character in endif tag");
+                state = PLAIN_TEXT;
+                break;
+
             default :
                 assert(0 && "invalid state");
                 break;
-
         }
     }
     uint8_t maxLen = DbaseDef->maxStringBufferSize;
@@ -1215,4 +1231,18 @@ void BDB_writeHeader(const uint8_t tableId,
     const char* txtFormat = NULL;
     GetTxtPtr(&txtFormat, tableDef->headerFormat);
     BDB_writeRecordWithFormat(tableId, recordId, txtFormat);
+}
+
+
+/* Returns the number of editable columns in the format string of the record, must be > 0
+ * So this is NOT the number of columns in the record!
+ */
+uint8_t BDB_getNumColumnsInFormat(const uint8_t tableId,
+                                  const uint8_t recordId) {
+    assert(GetTxtPtr != NULL); // this function relies on static text
+    const BDB_recordT* recordDef = getRecordDefFromBuffer(tableId, recordId);
+    const char* txtFormat = NULL;
+    GetTxtPtr(&txtFormat, recordDef->txtFormat);
+
+    return 0;
 }

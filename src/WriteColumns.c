@@ -72,6 +72,26 @@ void wc_writeInteger(uint16_t value,
 }
 
 
+void wc_writeHex(uint16_t value,
+                 uint16_t maxValue) {
+    uint8_t numDigits = 1;
+    while (maxValue > 0x0F) {
+        maxValue >>= 4;
+        numDigits++;
+    }
+    wc_setCursorPosition(CursorPosition + numDigits);
+    for (uint16_t i = CursorPosition; i > CursorPosition - numDigits; i--) {
+        const uint8_t digit = value & 0x0F;
+        if (digit < 10) {
+            StringBuffer[i - 1] = '0' + digit;
+        } else {
+            StringBuffer[i - 1] = 'A' + digit - 10;
+        }
+        value >>= 4;
+    }
+}
+
+
 // writes in reverse order, truncates if value does not fit in numDigits
 void wc_writeDecimal(uint16_t value,
                      const uint8_t numDigits,

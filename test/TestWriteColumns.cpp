@@ -60,6 +60,33 @@ TEST(WriteColumns, writeIntegerWithLeading0_FillsWith0s) {
 }
 
 
+// wc_writeHex
+
+
+TEST(WriteColumns, writeHexWithValue0AndMax15writes0) {
+    wc_writeHex(0, 15);
+    STRNCMP_EQUAL("0\0", wc_getWriteBuffer(), 3);
+}
+
+
+TEST(WriteColumns, writeHexWithValue0AndMax16writes00) {
+    wc_writeHex(0, 16);
+    STRNCMP_EQUAL("00\0", wc_getWriteBuffer(), 3);
+}
+
+
+TEST(WriteColumns, writeHexToLessSpaceThanNeeded_TruncatesHighSideValue) {
+    wc_writeHex(0x123, 0xFF);
+    STRNCMP_EQUAL("23\0", wc_getWriteBuffer(), 4);
+}
+
+
+TEST(WriteColumns, writeHexToMoreSpaceThanNeeded_FillsWithLeadingZeros) {
+    wc_writeHex(0xFF, 0x100);
+    STRNCMP_EQUAL("0FF\0 ", wc_getWriteBuffer(), 5);
+}
+
+
 // wc_writeDecimal
 
 

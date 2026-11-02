@@ -32,9 +32,22 @@
  * {&i+}           string representation of column i in the current record,
  *                  offset by 1
  *
- * {#}             index of the current record, {o#} and {#+} are allowed
+ * {x&i}           string representation of column i in the current record,
+ *                 in hexadecimal format, always takes up the full width with leading 0's
+ *
+ * {#}             index of the current record,
+ *                 right-aligned and padded on the left with spaces
+ *
+ * {o#}            index of the current record,
+ *                 right-aligned and padded on the left with zeros
+ *
+ * {#+}            index of the current record, offset by 1
  *
  * {*}             total number of records in this table
+ *                 right-aligned and padded on the left with spaces
+ *
+ * {o*}            total number of records in this table,
+ *                 right-aligned and padded on the left with zeros
  *
  * {^i}            string representation of column i in the parent table, record
  *                  of the current table
@@ -51,7 +64,7 @@
  *                     ==  !=  >  >=  <  <=
  *
  *                 RHS may be one of the following:
- *                      $j  a literal value
+ *                      j  a literal value
  *                      &j  the value of another column
  *                      #   the index of the current record
  *
@@ -72,6 +85,11 @@
  *     static const char format[] = "this is REC{o#+}";
  *     	may render as:
  *			"this is REC05"	if recordId == 4
+ *
+ * Invalid:
+ *
+ * {*+} : numRecords + 1 has no meaning
+ * {^i} : + not allowed (FIXME: SHOULD IT?)
  *
  */
 

@@ -60,6 +60,16 @@ void wc_writeInteger(uint16_t value,
                      const bool leading0);
 
 /*
+ * Writes an integer value to the writeBuffer at the current cursor position.
+ * The value is written in hexadecimal format, filling as much space as
+ * maxValue would.
+ * If the integer does not fit, it will be truncated on the left.
+ * On exit, the cursor position is at the next index.
+ */
+void wc_writeHex(uint16_t value,
+                 const uint16_t maxValue);
+
+/*
  * Writes a decimal value to the writeBuffer at the current cursor position.
  * The value of decimalShift determines where the decimal point is placed,
  *  where 1 means it is shifted 1 digit to the left.

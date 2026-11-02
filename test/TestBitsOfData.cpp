@@ -139,14 +139,19 @@ TEST(UseDbase, setValueOnVariableRecDefChangesBuffer) {
 // parent/child functions
 
 
-TEST(UseDbase, getParentTableOnAChildReturnsTableId) {
-    BYTES_EQUAL(2, BDB_getParentTable(0));
-    BYTES_EQUAL(2, BDB_getParentTable(1));
+TEST(UseDbase, getParentTableReturnsTableIdOfOnlyParentInDbaseDef) {
+    BYTES_EQUAL(2, BDB_getParentTable());
 }
 
 
 TEST(UseDbase, getParentRecordOnAnEmptyDbaseReturns0onTheFirstChildTable) {
     BYTES_EQUAL(0, BDB_getParentRecord(3));
+}
+
+
+TEST(UseDbase,
+     getChildTableOnAnEmptyDbase_returnsFirstChildTableonTheFirstParentRecord) {
+    BYTES_EQUAL(3, BDB_getChildTable(0));
 }
 
 
@@ -169,6 +174,8 @@ TEST(UseDbase, insertRecordGeneratesValueForChildTableRecord) {
     BDB_insertRecordAfter(2, 0);
     BYTES_EQUAL(0, BDB_getParentRecord(3));
     BYTES_EQUAL(1, BDB_getParentRecord(4));
+    BYTES_EQUAL(3, BDB_getChildTable(0));
+    BYTES_EQUAL(4, BDB_getChildTable(1));
 }
 
 
@@ -308,6 +315,18 @@ TEST(UseDbase, retrievingDifferentRecordsInTheSameTableConsecutivelyWorks) {
 
 
 // variable recordDefs
+
+
+TEST(UseDbase,
+     isRecordTypeVariable_returnsTrueOnTableWithVRT) {
+    CHECK_TRUE(BDB_isRecordTypeVariable(1));
+}
+
+
+TEST(UseDbase,
+     isRecordTypeVariable_returnsFalseOnTableWithoutVRT) {
+    CHECK_FALSE(BDB_isRecordTypeVariable(2));
+}
 
 
 TEST(UseDbase, inVariableRecordDefTable_The1stColumnHoldsTheRecordDef) {
@@ -1076,7 +1095,8 @@ static uint8_t getTxt(const char** txtPtr, const uint8_t txtId) {
 // BDB_COLUMN_TXT_LIST
 
 
-TEST(UseDbaseWithTxt, writeValue_onTxtListColumn_returnsTextFromFirstId) {
+TEST(UseDbaseWithTxt,
+     writeValue_onTxtListColumn_returnsTextFromFirstId) {
     BDB_openDataBase(&dbaseDef, getTxt);
     BDB_setValue(1, 0, 5, 0);
     BDB_writeValue(1, 0, 5, 0);
@@ -1084,7 +1104,8 @@ TEST(UseDbaseWithTxt, writeValue_onTxtListColumn_returnsTextFromFirstId) {
 }
 
 
-TEST(UseDbaseWithTxt, writeValue_onTxtListColumn_fillsUpToLengthOfLongestTxtInList) {
+TEST(UseDbaseWithTxt,
+     writeValue_onTxtListColumn_fillsUpToLengthOfLongestTxtInList) {
     BDB_openDataBase(&dbaseDef, getTxt);
     BDB_setValue(1, 0, 5, 1);
     BDB_writeValue(1, 0, 5, 0);
@@ -1265,4 +1286,13 @@ TEST(UseDbaseWithTxt, writeRecordWithAsteriskShowsTotalNumberOfRecords) {
     BDB_insertRecordAfter(1, 0);
     BDB_writeRecordWithFormat(1, 0, "{#+}/{o*}\0");
     STRNCMP_EQUAL(" 1/03", BDB_getWriteBuffer(), 5);
+}
+
+
+TEST(UseDbaseWithTxt, writeRecordWithXShowsHexaDecimalFormat) {
+    BDB_openDataBase(&dbaseDef, getTxt);
+    uint16_t rec0[] = { 5, 14, 0, 0, 0 };
+    CHECK_TRUE(BDB_setRecord(0, 0, rec0));
+    BDB_writeRecordWithFormat(0, 0, "{x&1}-{&1}\0");
+    STRNCMP_EQUAL("00E-  14", BDB_getWriteBuffer(), 8);
 }

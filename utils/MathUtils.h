@@ -8,9 +8,10 @@
 
 #include <stdint.h>
 
+#include "OperatorUtils.h"
 
 
-typedef enum {
+typedef enum { // FIXME: OBSOLETE!
     MU_NO_OPERATOR,
     MU_GREATER_THAN,
     MU_GREATER_THAN_OR_EQUAL,

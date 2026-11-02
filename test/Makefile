@@ -26,6 +26,7 @@ SRC_DIRS +=	$(PROJECT_DIR)/utils
 TEST_SRC_DIRS =	$(TEST_DIR)
 TEST_SRC_DIRS += $(MOCK_DIR)
 #TEST_SRC_DIRS += $(LIB_DIR)/Hardware/arch/X86
+TEST_SOURCES += $(TEST_DIR)/TestAssertOverride.cpp
 
 # what to call the test binary
 TEST_TARGET = testAll
@@ -77,3 +78,4 @@ CXXFLAGS += -include $(CPPUTEST_HOME)/include/CppUTest/MemoryLeakDetectorNewMacr
 CFLAGS += -include $(CPPUTEST_HOME)/include/CppUTest/MemoryLeakDetectorMallocMacros.h
 CFLAGS += -g
 CFLAGS += -fms-extensions
+CFLAGS += -ItestInclude

@@ -15,11 +15,11 @@
  *
  * BDB API contract:
  *
- * All API calls require valid identifiers.
- * Invalid tableId, recordId or columnId values are considered
- * programming errors and will trigger an assert (by design).
+ * All API calls require valid identifiers. Invalid tableId, recordId or
+ *  columnId values are considered programming errors and will trigger an
+ *  assert (by design). NOTE that invalid here also goes for records that do
+ *  not exist.
  */
-
 
 #ifndef BITS_OF_DATA_H
 #define BITS_OF_DATA_H
@@ -27,7 +27,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "BitsOfDataTypes.h"
-
 
 /*
  * Callback used to translate a text ID into a string.
@@ -44,7 +43,6 @@
  *   the length of the returned string
  */
 typedef uint8_t (*BDB_txtHandlerFunction)(const char** outStr, uint8_t txtId);
-
 
 /*
  * Opens an existing database or creates a new one if none exists.
@@ -117,7 +115,6 @@ bool BDB_canRecordBeDeleted(const uint8_t tableId,
 bool BDB_deleteRecord(const uint8_t tableId,
 					  const uint8_t recordId);
 
-
 /*
  * Returns a read-only view of the record, which is a an array of column values
  * 	with a length that is guaranteed to be >= numRealColumns.
@@ -143,6 +140,10 @@ const uint16_t* BDB_getRecord(const uint8_t tableId,
 bool BDB_setRecord(const uint8_t tableId,
 				   const uint8_t recordId,
 				   const uint16_t* data);
+
+/* Returns true if a table has variable record type, false if it is constant.
+ */
+bool BDB_isRecordTypeVariable(const uint8_t tableId);
 
 
 // Managing columns:
@@ -188,7 +189,7 @@ bool BDB_setValue(const uint8_t tableId,
  *   - BDB_syncTable() is called.
  *
  * If the change would exceed schema limits, it is truncated ot the limit.
- * Returns false if the data in the buffer after changeValue != the value before.
+ * Returns true if the data in the buffer after changeValue != the value before.
  */
 bool BDB_changeValue(const uint8_t tableId,
 					 const uint8_t recordId,
@@ -228,19 +229,30 @@ uint8_t BDB_importTable(const uint8_t tableId,
 // parent/child:
 // =============
 
-
 /*
- * Returns the table id of the parent of tableId. Calling this function on a
- * table that has no parent will result in an assertion failure.
+ * Returns the table id of the parent of tableId.
+ * Currently only 1 table with children is allowed, therefore tableId is not an
+ *  argument to this function.
+ * Calling this function on a database that has not table with children will
+ *  trigger an assert!
  */
-uint8_t BDB_getParentTable(const uint8_t tableId);
-
+uint8_t BDB_getParentTable(void);
 
 /*
  * Returns the record id of the parent of tableId. Calling this function on a
- * table that has no parent will result in an assertion failure.
+ *  table that has no parent will result in an assertion failure.
+ * Calling this function on a database that has not table with children will
+ *  trigger an assert!
  */
 uint8_t BDB_getParentRecord(const uint8_t tableId);
+
+/* Returns the tableId of a child table of a parent
+ * Currently only 1 table with children is allowed, therefore tableId is not an
+ *  argument to this function.
+ * Calling this function on a database that has not table with children will
+ *  trigger an assert!
+ */
+uint8_t BDB_getChildTable(const uint8_t recordId);
 
 
 // presentation:
@@ -308,7 +320,6 @@ void BDB_writeRecord(const uint8_t tableId,
 void BDB_writeHeader(const uint8_t tableId,
 					 const uint8_t recordId);
 
-
 /*
  * Writes the string representation of a database record into the write buffer.
  *
@@ -319,5 +330,29 @@ void BDB_writeHeader(const uint8_t tableId,
 void BDB_writeRecordWithFormat(const uint8_t tableId,
 							   const uint8_t recordId,
 							   const char* txtFormat);
+
+//TODO:
+/* Returns the number of (editable) columns in the format string of the record,
+ *  must be > 0
+ * So this is NOT the number of columns in the record!
+ */
+uint8_t BDB_getNumColumnsInFormat(const uint8_t tableId,
+								  const uint8_t recordId);
+
+//TODO:
+/* Returns the database columnId of the column at the given index in the format
+ *  string of this record.
+ */
+uint8_t BDB_getColumnIdFromFormat(const uint8_t tableId,
+								  const uint8_t recordId,
+								  const uint8_t recordFormatIndex);
+
+//TODO:
+/* Returns the cursorColumn determined from the column at the given index in
+ *  the format string of this record.
+ */
+uint8_t BDB_getCursorColumnFromFormat(const uint8_t tableId,
+									  const uint8_t recordId,
+									  const uint8_t recordFormatIndex);
 
 #endif
