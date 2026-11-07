@@ -4,12 +4,12 @@
  *  check if (all) tests also work if recId != 0 ?
  */
 
-#include "CppUTest/TestHarness.h"
+//#include "CppUTest/TestHarness.h"
 #include "cpputestUtils.h"
 
 extern "C" {
     #include "EeHw.h"
-    #include "EeHwX86.h"
+//    #include "EeHwX86.h"
     #include "BitsOfData.h"
     #include "RecordStore.h"
     #include "SchemaForTesting.h"
@@ -1062,16 +1062,8 @@ TEST(UseDbase, writeValueOfTableColumnReturnsNumberOfRecords) {
     STRNCMP_EQUAL(" 3", BDB_getWriteBuffer(), 1);
 }
 
-// Use Dbase with getTxt functions
-TEST_GROUP(UseDbaseWithTxt) {
-    void setup() {
-        eeClear();
-    }
 
-    void teardown() {
-        BDB_closeDataBase();
-    }
-};
+// Use Dbase with getTxt functions
 
 
 static uint8_t length(const char* txt) {
@@ -1081,7 +1073,13 @@ static uint8_t length(const char* txt) {
 }
 
 
-static const char* texts[] = {"yes", "zero", "no", " {&0} {&1}{&2}{&3}{&4}-{&7}", " {^7} "};
+static const char* texts[] = {
+    "yes",
+    "zero",
+    "no",
+    " {&0} {&1}{&2}{&3}{&4}-{&7}",
+    " {^7}"
+};
 
 
 static uint8_t getTxt(const char** txtPtr, const uint8_t txtId) {
@@ -1092,12 +1090,23 @@ static uint8_t getTxt(const char** txtPtr, const uint8_t txtId) {
 }
 
 
+TEST_GROUP(UseDbaseWithTxt) {
+    void setup() {
+        eeClear();
+        BDB_openDataBase(&dbaseDef, getTxt);
+    }
+
+    void teardown() {
+        BDB_closeDataBase();
+    }
+};
+
+
 // BDB_COLUMN_TXT_LIST
 
 
 TEST(UseDbaseWithTxt,
      writeValue_onTxtListColumn_returnsTextFromFirstId) {
-    BDB_openDataBase(&dbaseDef, getTxt);
     BDB_setValue(1, 0, 5, 0);
     BDB_writeValue(1, 0, 5, 0);
     STRNCMP_EQUAL("zero", BDB_getWriteBuffer(), 4); // returns texts[1], although value = 0 !
@@ -1106,10 +1115,22 @@ TEST(UseDbaseWithTxt,
 
 TEST(UseDbaseWithTxt,
      writeValue_onTxtListColumn_fillsUpToLengthOfLongestTxtInList) {
-    BDB_openDataBase(&dbaseDef, getTxt);
     BDB_setValue(1, 0, 5, 1);
     BDB_writeValue(1, 0, 5, 0);
     STRNCMP_EQUAL("no  \0", BDB_getWriteBuffer(), 5);
+}
+
+
+// writeRecord
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordReturnsStringForEntireRecord) {
+    // NOTE: format is texts[3]
+    uint16_t rec2[] = { 184, 12, 13, 14, 15, 3, 0 };
+    CHECK_TRUE(BDB_setRecord(2, 0, rec2));
+    BDB_writeRecord(2, 0);
+    STRNCMP_EQUAL(" 184 ABCD-ABCD      ", BDB_getWriteBuffer(), 20);
 }
 
 
@@ -1118,7 +1139,6 @@ TEST(UseDbaseWithTxt,
 
 TEST(UseDbaseWithTxt, writeheaderOnChildCanDisplayParentColumn) {
     // NOTE: format is texts[4]
-    BDB_openDataBase(&dbaseDef, getTxt);
     uint16_t rec2[] = { 184, 13, 12, 14, 15, 3, 0 };
     CHECK_TRUE(BDB_setRecord(2, 0, rec2));
     BDB_writeHeader(0, 0);
@@ -1126,173 +1146,256 @@ TEST(UseDbaseWithTxt, writeheaderOnChildCanDisplayParentColumn) {
 }
 
 
-// writeRecord
+// writeRecordWithFormat
 
 
-TEST(UseDbaseWithTxt, writeRecordReturnsStringForEntireRecord) {
-    // NOTE: format is texts[3]
-    BDB_openDataBase(&dbaseDef, getTxt);
-    uint16_t rec2[] = { 184, 12, 13, 14, 15, 3, 0 };
-    CHECK_TRUE(BDB_setRecord(2, 0, rec2));
-    BDB_writeRecord(2, 0);
-    STRNCMP_EQUAL(" 184 ABCD-ABCD      ", BDB_getWriteBuffer(), 20);
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_writesPlainText) {
+    BDB_writeRecordWithFormat(0, 0, "text\n");
+    STRNCMP_EQUAL("text", BDB_getWriteBuffer(), 4);
 }
 
 
-TEST(UseDbaseWithTxt, writeRecordWithFormatWorksWithAndWithoutLeading0) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    uint16_t rec1[] = { 0, 12, 15, 753, 75, 0 };
-    CHECK_TRUE(BDB_setRecord(1, 0, rec1));
-    BDB_writeRecordWithFormat(1, 0, "{&1}-{o&1}-{&3}\0");
-    STRNCMP_EQUAL(" 12-012- 753        ", BDB_getWriteBuffer(), 20);
+TEST(UseDbaseWithTxt,
+     writeRecordWithTrueIf_writesIfTrueText) {
+    BDB_setValue(0, 0, 1, 1);
+    BDB_writeRecordWithFormat(0, 0, "{?&1}true{:}false{;} ");
+    STRNCMP_EQUAL("true ", BDB_getWriteBuffer(), 5);
 }
 
 
-TEST(UseDbaseWithTxt, writeRecordWithFormatWorksOnCol0WithAndWithoutLeading0) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    uint16_t rec2[] = { 16, 12, 13, 14, 15, 3, 0 };
-    CHECK_TRUE(BDB_setRecord(2, 0, rec2));
-    BDB_writeRecordWithFormat(2, 0, "{&0}-{o&0}-{&0}\0");
-    STRNCMP_EQUAL(" 16-016- 16         ", BDB_getWriteBuffer(), 20);
+TEST(UseDbaseWithTxt,
+     writeRecordWithFalseIf_writesIfFalseText) {
+    BDB_setValue(0, 0, 1, 0);
+    BDB_writeRecordWithFormat(0, 0, "{?&1}true{:}false{;} ");
+    STRNCMP_EQUAL("false ", BDB_getWriteBuffer(), 6);
 }
 
 
-TEST(UseDbaseWithTxt, writeRecordWithFormatWorksOnDecimalWithAndWithoutLeading0) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    uint16_t rec1[] = { 0, 12, 15, 753, 75, 0 };
-    CHECK_TRUE(BDB_setRecord(1, 0, rec1));
+TEST(UseDbaseWithTxt,
+     writeRecordWithFalseIfCondition_writesIfFalseText) {
+    BDB_setValue(0, 0, 1, 0);
+    BDB_writeRecordWithFormat(0, 0, "{?&1}true{:}false{;} ");
+    STRNCMP_EQUAL("false ", BDB_getWriteBuffer(), 5);
+}
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithTrueIfCondition_writesIfTrueText) {
+    BDB_setValue(0, 0, 1, 2);
+    BDB_writeRecordWithFormat(0, 0, "{?&1}true{:}false{;} ");
+    STRNCMP_EQUAL("true ", BDB_getWriteBuffer(), 5);
+}
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_withoutElse_writesIfTrueTextWhenTrue) {
+    BDB_setValue(0, 0, 1, 1);
+    BDB_writeRecordWithFormat(0, 0, "{?&1}true{;} ");
+    STRNCMP_EQUAL("true ", BDB_getWriteBuffer(), 5);
+}
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_withoutElse_writesNoTextWhenFalse) {
+    BDB_setValue(0, 0, 1, 0);
+    BDB_writeRecordWithFormat(0, 0, "{?&1}true{;} ");
+    STRNCMP_EQUAL("     ", BDB_getWriteBuffer(), 5);
+}
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithNumRecordsWithoutLeading0_writesNumRecords) {
+    BDB_writeRecordWithFormat(1, 0, "{*}\n");
+    STRNCMP_EQUAL(" 1", BDB_getWriteBuffer(), 2);
+}
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithNumRecordsWithLeading0_writesNumRecords) {
+    BDB_writeRecordWithFormat(1, 0, "{o*}\n");
+    STRNCMP_EQUAL("01", BDB_getWriteBuffer(), 2);
+}
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithRecordId_withoutLeading0_writesRecordId) {
+    BDB_insertRecordAfter(1, 0);
+    BDB_insertRecordAfter(1, 0);
+    BDB_writeRecordWithFormat(1, 2, "{#}\n");
+    STRNCMP_EQUAL(" 2", BDB_getWriteBuffer(), 2);
+}
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithRecordId_withLeading0_writesRecordId) {
+    BDB_writeRecordWithFormat(1, 0, "{o#}\n");
+    STRNCMP_EQUAL("00", BDB_getWriteBuffer(), 2);
+}
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithColumnId_withoutLeading0_writesRecordValue) {
+    BDB_setValue(0, 0, 1, 412);
+    BDB_writeRecordWithFormat(0, 0, "{&1}\n");
+    STRNCMP_EQUAL(" 412 ", BDB_getWriteBuffer(), 4);
+}
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithColumnId_withLeading0_writesRecordValue) {
+    BDB_setValue(0, 0, 1, 412);
+    BDB_writeRecordWithFormat(0, 0, "{o&1}\n");
+    STRNCMP_EQUAL("0412 ", BDB_getWriteBuffer(), 4);
+}
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_padsWithTrailingSpacesUpToMaxStringBufferSize) {
+    BDB_writeRecordWithFormat(0, 0, "text\0");
+    STRNCMP_EQUAL("text                ", BDB_getWriteBuffer(), 20);
+}
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_writesDecimalWithAndWithoutLeading0) {
+    BDB_setValue(1, 0, 2, 15);
+    BDB_setValue(1, 0, 4, 75);
     BDB_writeRecordWithFormat(1, 0, "{&4}-{o&4}-{&2}\0");
     STRNCMP_EQUAL(" 7.5-07.5-0.0015    ", BDB_getWriteBuffer(), 20);
 }
 
 
-TEST(UseDbaseWithTxt, writeRecordWithIfWritesFirstOptionWhenTrue) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    uint16_t rec1[] = { 0, 0, 15, 753, 75, 0 };
-    CHECK_TRUE(BDB_setRecord(1, 0, rec1));
-    BDB_writeRecordWithFormat(1, 0, "|{?&1==$0}n/a{:}S{o&1}{;}|\0");
+// if literal
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_withIfEqLiteral_writesFirstOptionWhenTrue) {
+    BDB_setValue(1, 0, 1, 0);
+    BDB_writeRecordWithFormat(1, 0, "|{?&1==0}n/a{:}S{o&1}{;}|\0");
     STRNCMP_EQUAL("|n/a|               ", BDB_getWriteBuffer(), 20);
 }
 
 
-TEST(UseDbaseWithTxt, writeRecordWithIfWritesSecondOptionWhenFalse) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    uint16_t rec1[] = { 0, 5, 15, 753, 75, 0 };
-    CHECK_TRUE(BDB_setRecord(1, 0, rec1));
-    BDB_writeRecordWithFormat(1, 0, "|{?&1==$0}n/a{:}S{o&1}{;}|\0");
-    STRNCMP_EQUAL("|S005|              ", BDB_getWriteBuffer(), 20);
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_withIfLiteral_writesSecondOptionWhenFalse) {
+    BDB_setValue(1, 0, 1, 1);
+    BDB_writeRecordWithFormat(1, 0, "|{?&1==0}n/a{:}S{o&1}{;}|\0");
+    STRNCMP_EQUAL("|S001|              ", BDB_getWriteBuffer(), 20);
 }
 
 
-TEST(UseDbaseWithTxt, writeRecordWithIfAndGEoperatorWorks) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    uint16_t rec1[] = { 0, 5, 15, 753, 75, 0 };
-    CHECK_TRUE(BDB_setRecord(1, 0, rec1));
-    BDB_writeRecordWithFormat(1, 0, "{?&1>=$5}{o&1}{:}F{;}\0");
-    STRNCMP_EQUAL("005                 ", BDB_getWriteBuffer(), 20);
+// if other columnId
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_withIfOtherColumnIdWorks) {
+    BDB_setValue(1, 0, 1, 3);
+    BDB_setValue(1, 0, 2, 3);
+    BDB_writeRecordWithFormat(1, 0, "{?&1==&2}T{:}F{;}\0");
+    STRNCMP_EQUAL("T", BDB_getWriteBuffer(), 1);
 }
 
 
-TEST(UseDbaseWithTxt, writeRecordWithIfAndGToperatorWorks) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    uint16_t rec1[] = { 0, 5, 15, 753, 75, 0 };
-    CHECK_TRUE(BDB_setRecord(1, 0, rec1));
-    BDB_writeRecordWithFormat(1, 0, "{?&1>$5}{o&1}{:}F{;}\0");
-    STRNCMP_EQUAL("F                   ", BDB_getWriteBuffer(), 20);
-}
+// if recordId
 
 
-TEST(UseDbaseWithTxt, writeRecordWithRecordIdWorks) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    uint16_t rec1[] = { 0, 5, 15, 753, 75, 0 };
-    CHECK_TRUE(BDB_setRecord(1, 0, rec1));
-    BDB_writeRecordWithFormat(1, 0, "{#}\0");
-    STRNCMP_EQUAL(" 0                  ", BDB_getWriteBuffer(), 20);
-}
-
-
-TEST(UseDbaseWithTxt, writeRecordWithRecordIdAndLeading0Works) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    uint16_t rec1[] = { 0, 5, 15, 753, 75, 0 };
-    CHECK_TRUE(BDB_setRecord(1, 0, rec1));
-    BDB_writeRecordWithFormat(1, 0, "{o#}\0");
-    STRNCMP_EQUAL("00                  ", BDB_getWriteBuffer(), 20);
-}
-
-
-TEST(UseDbaseWithTxt, writeRecordWithRecordIdPlusWorks) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    uint16_t rec1[] = { 0, 5, 15, 753, 75, 0 };
-    CHECK_TRUE(BDB_setRecord(1, 0, rec1));
-    BDB_writeRecordWithFormat(1, 0, "{o#+}\0");
-    STRNCMP_EQUAL("01                  ", BDB_getWriteBuffer(), 20);
-}
-
-
-TEST(UseDbaseWithTxt, writeRecordWithIfAndSecondColumnLEWorks) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    uint16_t rec1[] = { 0, 5, 5, 753, 75, 0 };
-    CHECK_TRUE(BDB_setRecord(1, 0, rec1));
-    BDB_writeRecordWithFormat(1, 0, "{?&1>&2}>{:}<={;}\0");
-    STRNCMP_EQUAL("<=", BDB_getWriteBuffer(), 2);
-}
-
-
-TEST(UseDbaseWithTxt, writeRecordWithIfAndSecondColumnGTWorks) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    uint16_t rec1[] = { 0, 6, 5, 753, 75, 0 };
-    CHECK_TRUE(BDB_setRecord(1, 0, rec1));
-    BDB_writeRecordWithFormat(1, 0, "{?&1>&2}>{:}<={;}\0");
-    STRNCMP_EQUAL("> ", BDB_getWriteBuffer(), 2);
-}
-
-
-TEST(UseDbaseWithTxt, writeRecordWithIfAndRecordIdGTWorks) {
-    BDB_openDataBase(&dbaseDef, getTxt);
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_withRecordIdWorks) {
     BDB_insertRecordAfter(1, 0);
     BDB_insertRecordAfter(1, 0);
-    uint16_t rec1[] = { 0, 3, 5, 753, 75, 0 };
-    CHECK_TRUE(BDB_setRecord(1, 2, rec1));
-    BDB_writeRecordWithFormat(1, 2, "{?&1>#}>{:}<={;}\0");
-    STRNCMP_EQUAL("> ", BDB_getWriteBuffer(), 2);
+    BDB_setValue(1, 2, 1, 2);
+    BDB_writeRecordWithFormat(1, 2, "{?&1==#}T{:}F{;}\0");
+    STRNCMP_EQUAL("T", BDB_getWriteBuffer(), 1);
 }
 
 
-TEST(UseDbaseWithTxt, writeRecordWithIfAndRecordIdLEWorks) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    BDB_insertRecordAfter(1, 0);
-    BDB_insertRecordAfter(1, 0);
-    uint16_t rec1[] = { 0, 2, 5, 753, 75, 0 };
-    CHECK_TRUE(BDB_setRecord(1, 2, rec1));
-    BDB_writeRecordWithFormat(1, 2, "{?&1>#}>{:}<={;}\0");
-    STRNCMP_EQUAL("<=", BDB_getWriteBuffer(), 2);
+// operators
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_withNEoperatorWorks) {
+    BDB_setValue(1, 0, 1, 5);
+    BDB_writeRecordWithFormat(1, 0, "{?&1!=0}T{;}|{?&1!=5}F{;}\0");
+    STRNCMP_EQUAL("T|                  ", BDB_getWriteBuffer(), 20);
 }
 
 
-TEST(UseDbaseWithTxt, writeRecordWithIfAndRecordIdLTplusWorks) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    BDB_insertRecordAfter(1, 0);
-    BDB_insertRecordAfter(1, 0);
-    uint16_t rec1[] = { 0, 2, 5, 753, 75, 0 };
-    CHECK_TRUE(BDB_setRecord(1, 2, rec1));
-    BDB_writeRecordWithFormat(1, 2, "{?&1<#+}<{:}>={;}\0");
-    STRNCMP_EQUAL("< ", BDB_getWriteBuffer(), 2);
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_withGEoperatorWorks) {
+    BDB_setValue(1, 0, 1, 5);
+    BDB_writeRecordWithFormat(1, 0, "{?&1>=5}T{;}|{?&1>=6}F{;}\0");
+    STRNCMP_EQUAL("T|                  ", BDB_getWriteBuffer(), 20);
 }
 
 
-TEST(UseDbaseWithTxt, writeRecordWithAsteriskShowsTotalNumberOfRecords) {
-    BDB_openDataBase(&dbaseDef, getTxt);
-    BDB_insertRecordAfter(1, 0);
-    BDB_insertRecordAfter(1, 0);
-    BDB_writeRecordWithFormat(1, 0, "{#+}/{o*}\0");
-    STRNCMP_EQUAL(" 1/03", BDB_getWriteBuffer(), 5);
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_withGToperatorWorks) {
+    BDB_setValue(1, 0, 1, 5);
+    BDB_writeRecordWithFormat(1, 0, "{?&1>4}T{;}|{?&1>5}F{;}\0");
+    STRNCMP_EQUAL("T|                   ", BDB_getWriteBuffer(), 20);
 }
 
 
-TEST(UseDbaseWithTxt, writeRecordWithXShowsHexaDecimalFormat) {
-    BDB_openDataBase(&dbaseDef, getTxt);
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_withLEoperatorWorks) {
+    BDB_setValue(1, 0, 1, 5);
+    BDB_writeRecordWithFormat(1, 0, "{?&1<=5}T{;}|{?&1<=4}F{;}\0");
+    STRNCMP_EQUAL("T|                  ", BDB_getWriteBuffer(), 20);
+}
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_withLToperatorWorks) {
+    BDB_setValue(1, 0, 1, 5);
+    BDB_writeRecordWithFormat(1, 0, "{?&1<6}T{;}|{?&1<5}F{;}\0");
+    STRNCMP_EQUAL("T|                   ", BDB_getWriteBuffer(), 20);
+}
+
+
+//
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_recordIdPlusWorks) {
+    BDB_insertRecordAfter(1, 0);
+    BDB_insertRecordAfter(1, 0);
+    BDB_writeRecordWithFormat(1, 2, "{o#+}\0");
+    STRNCMP_EQUAL("03                  ", BDB_getWriteBuffer(), 20);
+}
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_asteriskShowsTotalNumberOfRecords) {
+    BDB_insertRecordAfter(1, 0);
+    BDB_insertRecordAfter(1, 0);
+    BDB_writeRecordWithFormat(1, 0, "{o*}\0");
+}
+
+
+TEST(UseDbaseWithTxt,
+     writeRecordWithFormat_asHexShowsHexaDecimalFormat) {
+    BDB_setValue(0, 0, 1, 14);
+    BDB_writeRecordWithFormat(0, 0, "{x&1}\0");
+    STRNCMP_EQUAL("00E ", BDB_getWriteBuffer(), 4);
+}
+
+
+// getNumEditableColumnsInFormat
+
+
+TEST(UseDbaseWithTxt,
+     getNumEditableColumnsInFormat_with1Format_returns1) {
     uint16_t rec0[] = { 5, 14, 0, 0, 0 };
     CHECK_TRUE(BDB_setRecord(0, 0, rec0));
-    BDB_writeRecordWithFormat(0, 0, "{x&1}-{&1}\0");
-    STRNCMP_EQUAL("00E-  14", BDB_getWriteBuffer(), 8);
+    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{x&1}b\0");
+    BYTES_EQUAL(1, numCols);
 }
+
+/* todo :
+ *
+ * getNumEditableColumnsInFormat_with2Formats_returns2
+ * getNumEditableColumnsInFormat_withIf_returnsCorrectNum
+ * getNumEditableColumnsInFormat_withIfElse_returnsCorrectNum
+ *
+ */

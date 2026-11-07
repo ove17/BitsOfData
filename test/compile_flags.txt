@@ -1,0 +1,14 @@
+-std=c++11
+-pedantic
+-g
+-fms-extensions
+
+-I../include
+-I../src
+-I../utils
+-I.
+-Imocks
+-ItestInclude
+
+-I/Users/edwinvanopstal/newCode/cpputest-3.8/include
+-I/Users/edwinvanopstal/newCode/cpputest-3.8/include/Platforms/Gcc

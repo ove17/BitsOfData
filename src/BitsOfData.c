@@ -13,9 +13,11 @@
 #include <assert.h>
 #include "BitsOfData.h"
 #include "BitsOfDataTypes.h"
+#include "OperatorUtils.h"
 #include "RecordStore.h"
 #include "RecordCodec.h"
 #include "WriteColumns.h"
+#include "TemplateLanguage.h"
 #include "MathUtils.h"
 #include "TxtUtils.h"
 
@@ -23,18 +25,12 @@
 #define NOT_SET 0xFF
 #define INVALID_VALUE 0xFFFF
 
+
 typedef struct {
     uint8_t tableId;
     uint8_t recordId;
     uint8_t columnId;
 } TrcT;
-
-
-typedef struct {
-    bool leading0;
-    bool offset1;
-    bool hex;
-} PropT;
 
 
 typedef struct {
@@ -827,7 +823,7 @@ static bool isRecordTypeColumn(const uint8_t tableId,
 static void writeValue(const uint8_t tableId,
                        const uint8_t recordId,
                        const uint8_t columnId,
-                       const PropT properties) {
+                       const tl_valuePropT properties) {
     const bool leading0 = properties.leading0;
     const bool offset1 = properties.offset1;
     const uint16_t value = BDB_getValue(tableId, recordId, columnId);
@@ -837,7 +833,7 @@ static void writeValue(const uint8_t tableId,
         case BDB_COLUMN_INTEGER : {
             const bool offset1 = properties.offset1;
             const uint16_t maxValue = columnDef->maxValue;
-            if (properties.hex) {
+            if (properties.asHex) {
                 wc_writeHex(value, maxValue);
             } else {
                 const uint8_t numDigits = mu_getNumDigits(maxValue);
@@ -950,7 +946,7 @@ uint8_t BDB_writeValue(const uint8_t tableId,
                        const uint8_t columnId,
                        const uint8_t position) {
     wc_setCursorPosition(position);
-    PropT properties =  {.leading0 = false, .offset1 = false, .hex = false};
+    tl_valuePropT properties =  {.leading0 = false, .offset1 = false, .asHex = false};
     writeValue(tableId, recordId, columnId, properties);
     return wc_getCursorPosition();
 }
@@ -958,7 +954,7 @@ uint8_t BDB_writeValue(const uint8_t tableId,
 
 static void writeRecordID(const uint8_t tableId,
                           uint8_t recordId,
-                          const PropT properties) {
+                          const tl_valuePropT properties) {
     const uint16_t maxNumRecords = DbaseDef->tables[tableId].maxNumRecords;
     uint8_t numDigits = mu_getNumDigits(maxNumRecords);
     if (properties.offset1) {
@@ -969,7 +965,7 @@ static void writeRecordID(const uint8_t tableId,
 
 
 static void writeNumRecords(const uint8_t tableId,
-                            const PropT properties) {
+                            const tl_valuePropT properties) {
     const uint16_t maxNumRecords = DbaseDef->tables[tableId].maxNumRecords;
     uint8_t numDigits = mu_getNumDigits(maxNumRecords);
     const uint8_t numRecords = rs_getNumRecords(tableId);
@@ -977,235 +973,119 @@ static void writeNumRecords(const uint8_t tableId,
 }
 
 
-enum {
-    PLAIN_TEXT,
-    START_TAG,
-    COLUMN_ID_TAG,
-    IF_TAG_COLUMN_ID,
-    IF_TAG_RIGHT_HAND_SIDE,
-    IF_LITERAL_VALUE,
-    IF_RECORD_ID,
-    IF_OTHER_COLUMN,
-    RECORD_ID_TAG,
-    NUM_RECORDS_TAG,
-    PARENT_TAG,
-    SKIP_TO_ELSE,
-    ELSE_TAG,
-    SKIP_TO_ENDIF,
-    ENDIF_TAG,
-};
-
-
-static uint8_t updateNumber(const uint8_t number,
-                            const uint8_t chr) {
-    assert((chr >= '0' && chr <= '9') && "invalid char");
-    return number * 10 + chr - '0';
+static void writeTokenValue(const tl_tokenT *token,
+                            const uint8_t tableId,
+                            const uint8_t recordId) {
+    const tl_valuePropT *properties = &token->properties;
+    const uint8_t columnId = token->value;
+    switch(token->valType) {
+        case tl_value_column_id :
+            writeValue(tableId, recordId, columnId, *properties);
+            break;
+        case tl_value_record_id :
+            writeRecordID(tableId, recordId, *properties);
+            break;
+        case tl_value_num_records :
+            writeNumRecords(tableId, *properties);
+            break;
+        case tl_value_parent_column_id :
+            const uint8_t recId = BDB_getParentRecord(tableId);
+            writeValue(ParentTableId, recId, columnId, *properties);
+            break;
+        default :
+            break;
+    }
 }
 
 
-static bool matchTag(const char *txt,
-                     uint8_t i,
-                     const char tagChr) {
-    return txt[i] == '{'
-        && txt[i + 1] == tagChr
-        && txt[i + 2] == '}';
+static uint16_t evaluateTokenValue(const tl_tokenT *token,
+                                   const uint8_t tableId,
+                                   const uint8_t recordId) {
+    const tl_valueTypeT valueType = token->valType;
+    switch (valueType) {
+        case tl_value_literal :
+            return token->value;
+        case tl_value_column_id :
+            const uint8_t columnId = token->value;
+            return BDB_getValue(tableId, recordId, columnId);
+        case tl_value_record_id :
+            return recordId;
+        default :
+            assert(0 && "invalid tokenValue type");
+    }
+    return 0;
 }
 
 
+#define NOTHING_TO_SKIP 0xFF  // only for void BDB_writeRecordWithFormat()
+
+
+/* token interpreter
+ * assumes token syntax is correct
+ */
 void BDB_writeRecordWithFormat(const uint8_t tableId,
                                const uint8_t recordId,
                                const char* txtFormat) {
+    tl_tokenT *fmtTokens = tl_parseFormat(txtFormat);
     wc_setCursorPosition(0);
-    bool condition = false;
-    mu_operatorT operator = MU_NO_OPERATOR;
-    uint8_t number = 0;
-    uint16_t value = 0;
-    PropT properties = {.leading0 = false, .offset1 = false, .hex = false};
-    uint8_t state = PLAIN_TEXT;
-    for (uint8_t i = 0; txtFormat[i] != '\0'; i++) {
-        const char chr = txtFormat[i];
-        switch (state) {
+    uint8_t skipFromTokenId = NOTHING_TO_SKIP;
+    uint8_t skipToTokenId = 0;
 
-            case PLAIN_TEXT : {
-                if (chr == '{') {
-                    number = 0;
-                    properties.leading0 = false;
-                    properties.offset1 = false;
-                    properties.hex = false;
-                    state = START_TAG;
+    uint8_t tokenId = 0;
+    while (tokenId < tl_MAX_NUM_TOKENS) {
+        const tl_tokenT token = fmtTokens[tokenId];
+        switch (token.type) {
+
+            case tl_text :
+                const uint8_t start = token.text.start;
+                const uint8_t length = token.text.length;
+                wc_writeTxt(txtFormat + start, length);
+                break;
+
+            case tl_value :
+                writeTokenValue(&token, tableId, recordId);
+                break;
+
+            case tl_if_lhs :
+                const tl_tokenT nextToken = fmtTokens[tokenId + 1];
+                const uint16_t value = evaluateTokenValue(&token,
+                                                          tableId,
+                                                          recordId);
+                bool condition = false;
+                if (nextToken.type == tl_if_rhs) {
+                    const ou_operatorT ifOperator = nextToken.rhs.ifOperator;
+                    const uint16_t number = evaluateTokenValue(&nextToken,
+                                                               tableId,
+                                                               recordId);
+                    condition = ou_evalCondition(value, ifOperator, number);
+                    tokenId++; // skip rhs
+                } else { //no rhs found
+                    condition = value;
+                }
+                if (condition) {
+                    // prepare for skipping false later
+                    skipFromTokenId = token.lhs.elseIndex;
+                    skipToTokenId = token.lhs.endIndex;
                 } else {
-                    wc_writeTxt(&chr, 1);
-                }
-                break;
-            }
-
-            case START_TAG : {
-                switch (chr) {
-                    case '&' :
-                        state = COLUMN_ID_TAG;
-                        break;
-                    case '?' :
-                        assert(txtFormat[i + 1] == '&');
-                        i++; // skip '&'
-                        state = IF_TAG_COLUMN_ID;
-                        break;
-                    case ':' :
-                        state = ELSE_TAG;
-                        break;
-                    case ';' :
-                        state = ENDIF_TAG;
-                        break;
-                    case '#' :
-                        state = RECORD_ID_TAG;
-                        break;
-                    case '*' :
-                        state = NUM_RECORDS_TAG;
-                        break;
-                    case '^' :
-                        state = PARENT_TAG;
-                        break;
-                    case 'o' :
-                        properties.leading0 = true;
-                        // remain in START_TAG state!
-                        break;
-                    case 'x' :
-                        properties.hex = true;
-                        // remain in START_TAG state!
-                        break;
-                    default :
-                        assert(0 && "Invalid start character in tag");
-                        break;
-                }
-                break;
-            }
-
-            case COLUMN_ID_TAG :
-                if (chr == '}' ) {
-                    writeValue(tableId, recordId, number, properties);
-                    state = PLAIN_TEXT;
-                } else if (chr == '+') {
-                    properties.offset1 = true;
-                } else {
-                    number = updateNumber(number, chr);
+                    // skip true directly
+                    tokenId = token.lhs.elseIndex - 1;
                 }
                 break;
 
-            case NUM_RECORDS_TAG :
-                assert(chr == '}' && "invalid character in num records tag");
-                writeNumRecords(tableId, properties);
-                state = PLAIN_TEXT;
-                break;
-
-            case RECORD_ID_TAG :
-                if (chr == '+') {
-                    properties.offset1 = true;
-                } else {
-                    assert(chr == '}' && "invalid character in recordId tag");
-                    writeRecordID(tableId, recordId, properties);
-                    state = PLAIN_TEXT;
-                }
-                break;
-
-            case PARENT_TAG :
-                if (chr == '}' ) {
-                    const uint8_t recId = BDB_getParentRecord(tableId);
-                    writeValue(ParentTableId, recId, number, properties);
-                    state = PLAIN_TEXT;
-                } else {
-                    number = updateNumber(number, chr);
-                }
-                break;
-
-            case IF_TAG_COLUMN_ID :
-                if (chr == '=' || chr == '>' || chr == '<'  || chr == '!' ) {
-                    operator = tu_getOperator(&txtFormat[i]);
-                    if (tu_getOperatorLength(operator) == 2) i++;
-                    value = BDB_getValue(tableId, recordId, number);
-                    number = 0;
-                    state = IF_TAG_RIGHT_HAND_SIDE;
-                } else {
-                    number = updateNumber(number, chr);
-                }
-                break;
-
-            case IF_TAG_RIGHT_HAND_SIDE :
-                if (chr == '$') {
-                    state = IF_LITERAL_VALUE;
-                } else if (chr == '#') {
-                    state = IF_RECORD_ID;
-                } else if (chr == '&') {
-                    state = IF_OTHER_COLUMN;
-                } else {
-                    assert(0 && "invalid character in if tag RHS");
-                }
-                break;
-
-            case IF_LITERAL_VALUE :
-                if (chr == '}') {
-                    condition = mu_evalCondition(value, operator, number);
-                    state = condition ? PLAIN_TEXT : SKIP_TO_ELSE;
-                } else {
-                    number = updateNumber(number, chr);
-                }
-                break;
-
-            case IF_RECORD_ID :
-                if (chr == '}') {
-                    uint8_t rhs = recordId;
-                    if (properties.offset1) {
-                        rhs++;
-                    }
-                    condition = mu_evalCondition(value, operator, rhs);
-                    state = condition ? PLAIN_TEXT : SKIP_TO_ELSE;
-                } else if (chr == '+') {
-                    properties.offset1 = true;
-                } else {
-                    assert(0 && "invalid character in if record tag");
-                }
-                break;
-
-            case IF_OTHER_COLUMN :
-                if (chr == '}') {
-                    const uint16_t value2 = BDB_getValue(tableId,
-                                                         recordId,
-                                                         number);
-                    condition = mu_evalCondition(value, operator, value2);
-                    state = condition ? PLAIN_TEXT : SKIP_TO_ELSE;
-                } else {
-                    number = updateNumber(number, chr);
-                }
-                break;
-
-            case SKIP_TO_ELSE:
-                if (matchTag(txtFormat, i, ':')) {
-                    i += 2;
-                    state = PLAIN_TEXT;
-                }
-                break;
-
-            case SKIP_TO_ENDIF:
-                if (matchTag(txtFormat, i, ';')) {
-                    i += 2;
-                    state = PLAIN_TEXT;
-                }
-                break;
-
-            case ELSE_TAG :
-                assert(chr == '}' && "invalid character in else tag");
-                state = condition ? SKIP_TO_ENDIF : PLAIN_TEXT;
-                break;
-
-            case ENDIF_TAG :
-                assert(chr == '}' && "invalid character in endif tag");
-                state = PLAIN_TEXT;
+            case tl_invalid :
+                tokenId = tl_MAX_NUM_TOKENS;
                 break;
 
             default :
-                assert(0 && "invalid state");
-                break;
+                assert(0 && "invalid token type");
+        }
+        tokenId++;
+        if (tokenId >= skipFromTokenId) {
+            tokenId = skipToTokenId;
+            skipFromTokenId = NOTHING_TO_SKIP;
         }
     }
-    uint8_t maxLen = DbaseDef->maxStringBufferSize;
+    const uint8_t maxLen = DbaseDef->maxStringBufferSize;
     while (wc_getCursorPosition() < maxLen) {
         wc_writeTxt(" ", 1); // pad with spaces
     }
@@ -1234,15 +1114,21 @@ void BDB_writeHeader(const uint8_t tableId,
 }
 
 
+uint8_t BDB_getNumEditableColumnsInFormat(const uint8_t tableId,
+                                          const uint8_t recordId,
+                                          const char* txtFormat) {
+    return 1;
+}
+
+
 /* Returns the number of editable columns in the format string of the record, must be > 0
  * So this is NOT the number of columns in the record!
  */
-uint8_t BDB_getNumColumnsInFormat(const uint8_t tableId,
-                                  const uint8_t recordId) {
+uint8_t BDB_getNumEditableColumn(const uint8_t tableId,
+                                 const uint8_t recordId) {
     assert(GetTxtPtr != NULL); // this function relies on static text
     const BDB_recordT* recordDef = getRecordDefFromBuffer(tableId, recordId);
     const char* txtFormat = NULL;
     GetTxtPtr(&txtFormat, recordDef->txtFormat);
-
-    return 0;
+    return BDB_getNumEditableColumnsInFormat(tableId, recordId, txtFormat);
 }

@@ -7,9 +7,10 @@
  *
  * The parser takes a format string as input. Its result is an aray of
  *  tl_formatTokenT structs.
- * There is no explicit numTokens variable: the first
- *  FormatToken[i].type == TL_INVALID indicates the end of valid tokens and
- *  hence the number of tokens.
+ * There is no explicit numTokens variable: the number of tokens is indicated by
+ *  the the end of valid tokens, i.e. the first occurance of:
+ *      FormatToken[i].type == tl_invalid
+ *
  * The parser checks formatString syntax, syntax errors result in assertion
  *  failures, so the user (= programmer of the caller) is responsible.
  *
@@ -18,20 +19,22 @@
  *
  * The format of the tokens is defined in this header.
  * Additional notes about the tokens:
- *  - a TL_TEXT token only points to the text in the formatString, it does not
+ *  - a tl_text token only points to the text in the formatString, it does not
  *      hold the text itself.
- *  - a TL_VALUE token may hold a literal number or a database (parent)columnId,
+ *  - a tl_value token may hold a literal number or a database (parent)columnId,
  *      but it may also indicate a type, like the current recordId or number of
  *      records of the curent table.
  *  - The TL_IF_* tokens also hold values, they use the same tl_valueT
- *      substruct as TL_VALUE
- *  - A condition, e.g. {?&0}, results in a stand alone TL_IF_LHS token
- *  - A comparison, e.g. {?&0==0}, results in a TL_IF_LHS token, immediately
- *      followed by a TL_IF_RHS token.
- *  - The jump indices of TL_IF_LHS always point forwards to the 1st token
+ *      substruct as tl_value
+ *  - A condition, e.g. {?&0}, results in a stand alone tl_if_lhs token
+ *  - A comparison, e.g. {?&0==0}, results in a tl_if_lhs token, immediately
+ *      followed by a tl_if_rhs token.
+ *  - The jump indices of tl_if_lhs always point forwards to the 1st token
  *      after the {:} or {;} tag. If the {;} tag is the last in the formatString
  *      endIndex will point 1 token after the last valid one (i.e. the 1st
- *      TL_INVALID token).
+ *      tl_invalid token).
+ *  - If no {:} is present between {?..} and {;}, the elseIndex will be set to
+ *      the same value as the endIndex.
  *
  * The following are considered syntax errors and will trigger asserts:
  *  - an empty format string
@@ -44,6 +47,7 @@
  *  - an if tag without an endif tag
  *  - an endif or else tag without an if tag
  *  - nested if tags
+ *  - any invalid (combination of) pre- and postfixes
  */
 
 #ifndef TEMPLATE_LANGUAGE_H
@@ -54,47 +58,66 @@
 
 #include "OperatorUtils.h"
 
+#define tl_MAX_NUM_TOKENS 20
+
 
 typedef enum {
 // values with format properties:
-    TL_VALUE_COLUMN_ID,
-    TL_VALUE_RECORD_ID,
-    TL_VALUE_NUM_RECORDS,
+    tl_value_column_id,
+    tl_value_record_id,
+    tl_value_num_records,
 // values without format properties:
-    TL_VALUE_PARENT_COLUMN_ID, // FIXME: inherits parent column props, or overrides them?
-    TL_VALUE_LITERAL,
+    tl_value_parent_column_id, // NOTE: inherits parent column properties
+    tl_value_literal,
 } tl_valueTypeT;
 
 
 typedef struct {
-    tl_valueTypeT type; // TODO: could/should this be integrated into tl_tokenTypeT?
-    uint8_t number;
     bool leading0;
     bool offset1;
     bool asHex;
-} tl_valueT;
-
+    bool isHidden;
+    bool isFixed;
+} tl_valuePropT;
 
 typedef enum {
-    TL_INVALID, // no valid token(type)
-    TL_TEXT,
-    TL_VALUE,
-    TL_IF_LHS,
-    TL_IF_RHS,
+    tl_invalid, // no valid token(type)
+    tl_text,
+    tl_value,
+    tl_if_lhs,
+    tl_if_rhs,
 } tl_tokenTypeT;
 
+/* FIXME do this or delete:
+typedef enum {
+    tl_invalid, // no valid token(type)
+    tl_text,
+    tl_value_column_id,
+    tl_value_record_id,
+    tl_value_num_records,
+    tl_value_parent_column_id, // NOTE: inherits parent column properties
+    tl_if_lhs_column_id,
+    tl_if_rhs_column_id,
+    tl_if_rhs_record_id,
+    tl_if_rhs_literal
+} tl_tokenTypeT;
+*/
 
 typedef struct {
     tl_tokenTypeT type;
-    tl_valueT value;
+
+    tl_valueTypeT valType; // TODO: could/should this be integrated into tl_tokenTypeT?
+    uint8_t value;
+    tl_valuePropT properties;
+
     union {
         struct {
             uint8_t start;  // index in the textFmt string
             uint8_t length;
         } text;
 
-        struct {
-            uint8_t elseIndex;  // elseIndex == 0 means there is no else
+        struct { // elseIndex == endIndex means there is no else
+            uint8_t elseIndex;
             uint8_t endIndex;
         } lhs;
 
@@ -102,10 +125,10 @@ typedef struct {
             ou_operatorT ifOperator;
         } rhs;
     };
-} tl_formatTokenT;
+} tl_tokenT;
 
 
-tl_formatTokenT *tl_parseFormat(const char *formatString);
+tl_tokenT *tl_parseFormat(const char *formatString);
 
 /*
  * FIXME: overweeg:
@@ -120,7 +143,7 @@ bool tl_parseFormat(
 // FIXME: voorlopig dit niet:
 typedef struct {
     const char *fmtString; // TODO: ptr naar de string, of de txtIndex van de string?
-    uint8_t numTokens;  // FIXME: NOT needed: TL_INVALID or MAX_NUM_TOKENS!
+    uint8_t numTokens;  // FIXME: NOT needed: tl_invalid or MAX_NUM_TOKENS!
     uint8_t numColumns;
         / * numColumns = aantal kolomreferenties dat tijdens een specifieke
          * uitvoering actief is. DUS kan de parser dit niet berekenen, maar

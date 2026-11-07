@@ -60,6 +60,13 @@ TEST(WriteColumns, writeIntegerWithLeading0_FillsWith0s) {
 }
 
 
+TEST(WriteColumns, writeIntegerWithLeading0_FillsWith0andLeavesCursorAtEnd) {
+    wc_writeInteger(412, 4, true);
+    STRNCMP_EQUAL("0412\0", wc_getWriteBuffer(), 6);
+    BYTES_EQUAL(4, wc_getCursorPosition());
+}
+
+
 // wc_writeHex
 
 

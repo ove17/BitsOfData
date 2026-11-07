@@ -1,4 +1,1 @@
 DNDEBUG gebruiken als compiler flag bij productie code
-
-symbolen zijn speciale karakters in strings (>127)
-	deze speciale karakters worden er door writeLcd functies uitgefilterd en als spec. char gestuurd

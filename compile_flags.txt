@@ -1,0 +1,14 @@
+
+-std=c11
+-pedantic
+-g
+-fms-extensions
+-Wno-missing-prototypes
+-Wno-strict-prototypes
+
+-Iinclude
+-Isrc
+-Iutils
+-Itest
+-Itest/mocks
+-Itest/testInclude

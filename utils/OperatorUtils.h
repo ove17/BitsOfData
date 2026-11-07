@@ -5,13 +5,13 @@
 
 
 typedef enum {
-    OU_INVALID_OPERATOR,
-    OU_GREATER_THAN,
-    OU_GREATER_THAN_OR_EQUAL,
-    OU_EQUAL,
-    OU_LESS_THAN,
-    OU_LESS_THAN_OR_EQUAL,
-    OU_NOT_EQUAL
+    ou_invalid_operator,
+    ou_greater_than,
+    ou_greater_than_or_equal,
+    ou_equal,
+    ou_less_than,
+    ou_less_than_or_equal,
+    ou_not_equal
 } ou_operatorT;
 
 
@@ -19,19 +19,19 @@ typedef enum {
 static inline ou_operatorT ou_getOperator(const char* txt) {
     switch(txt[0]) {
         case '=' :
-            if (txt[1] == '=') return OU_EQUAL;
-            return OU_INVALID_OPERATOR;
+            if (txt[1] == '=') return ou_equal;
+            return ou_invalid_operator;
         case '!' :
-            if (txt[1] == '=') return OU_NOT_EQUAL;
-            return OU_INVALID_OPERATOR;
+            if (txt[1] == '=') return ou_not_equal;
+            return ou_invalid_operator;
         case '>' :
-            if (txt[1] == '=') return OU_GREATER_THAN_OR_EQUAL;
-            return OU_GREATER_THAN;
+            if (txt[1] == '=') return ou_greater_than_or_equal;
+            return ou_greater_than;
         case '<' :
-            if (txt[1] == '=') return OU_LESS_THAN_OR_EQUAL;
-            return OU_LESS_THAN;
+            if (txt[1] == '=') return ou_less_than_or_equal;
+            return ou_less_than;
         default :
-            return OU_INVALID_OPERATOR;
+            return ou_invalid_operator;
     }
 }
 
@@ -39,16 +39,38 @@ static inline ou_operatorT ou_getOperator(const char* txt) {
 // returns the number of characters in the operator
 static inline uint8_t ou_getOperatorLength(const ou_operatorT ifOperator) {
     switch (ifOperator) {
-        case OU_EQUAL:
-        case OU_NOT_EQUAL:
-        case OU_GREATER_THAN_OR_EQUAL:
-        case OU_LESS_THAN_OR_EQUAL:
+        case ou_equal:
+        case ou_not_equal:
+        case ou_greater_than_or_equal:
+        case ou_less_than_or_equal:
             return 2;
-        case OU_GREATER_THAN:
-        case OU_LESS_THAN:
+        case ou_greater_than:
+        case ou_less_than:
             return 1;
         default:
             return 0;
+    }
+}
+
+
+static inline bool ou_evalCondition(const uint16_t value,
+                                    const ou_operatorT ifOperator,
+                                    const uint16_t target) {
+    switch(ifOperator) {
+        case ou_less_than :
+            return value < target;
+        case ou_less_than_or_equal :
+            return value <= target;
+        case ou_equal :
+            return value == target;
+        case ou_greater_than :
+            return value > target;
+        case ou_greater_than_or_equal :
+            return value >= target;
+        case ou_not_equal :
+            return value != target;
+        default :
+            return false;
     }
 }
 

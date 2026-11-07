@@ -8,14 +8,14 @@ ONLY the public API is tested (and fully tested)
 public API :
 	functions:	 ACRONYM_camelCase()
 	types:		 ACRONYM_camelCaseT
-	variables:	 avoid at all cost
+	variables:	 avoid globals at all cost
 	defines:	 ACRONYM_UPPER_CASE
 	enum values: ACRONYM_lower_case
 
 internal api (module):
 	functions:	 acronym_camelCase()
 	types:		 acronym_camelCaseT
-	variables:	 avoid at all cost
+	variables:	 avoid globals at all cost
 	defines:	 acronym_UPPER_CASE
 	enum values: acronym_lower_case
 
@@ -38,13 +38,12 @@ general:
 	├── src/
 	│   ├── BitsOfData.c
 	│   ├── Cache.c
+	│   ├── Cache.h
 	│   ├── IndexList.c
+	│   ├── IndexList.h
 	│   ├── RecordStore.c
-	│   └── internal/		// internal headers, module-private
-	│       ├── Cache.h
-	│       ├── IndexList.h
-	│       ├── RecordStore.h
-	│       └── Utils.h
+	│   ├── RecordStore.h
+	│   └── Utils.h
 	├── tests/				// may replace external sources during tests
 	│   └── mockRecord.c
 

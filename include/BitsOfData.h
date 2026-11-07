@@ -336,8 +336,9 @@ void BDB_writeRecordWithFormat(const uint8_t tableId,
  *  must be > 0
  * So this is NOT the number of columns in the record!
  */
-uint8_t BDB_getNumColumnsInFormat(const uint8_t tableId,
-								  const uint8_t recordId);
+uint8_t BDB_getNumEditableColumnsInFormat(const uint8_t tableId,
+										  const uint8_t recordId,
+										  const char* txtFormat);
 
 //TODO:
 /* Returns the database columnId of the column at the given index in the format

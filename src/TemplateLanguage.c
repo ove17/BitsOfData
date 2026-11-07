@@ -6,166 +6,222 @@
 #include <stdbool.h>
 
 #include "TemplateLanguage.h"
+#include "OperatorUtils.h"
 
-#define MAX_NUM_TOKENS 20
 #define NOT_IN_IF_TAG 0xFF
+#define RESET_TEXT_PARSER '\xFF'
 
 
-static tl_formatTokenT FormatTokens[MAX_NUM_TOKENS];
+//TODO: consider if this should be input (including MAX_NUM_TOKENS)
+static tl_tokenT Tokens[tl_MAX_NUM_TOKENS];
 
 enum {
-    PLAIN_TEXT,
-    START_TAG,
-    COLUMN_ID,
-    RECORD_ID,
-    NUM_RECORDS,
-    PARENT_COLUMN_ID,
-    IF_LITERAL_VALUE,
-    IF_TAG_LEFT_HAND_SIDE,
-    IF_TAG_RIGHT_HAND_SIDE,
-    ELSE_TAG,
-    ENDIF_TAG
+    plain_text,
+    checkIfTag,
+    tag_prefix,
+    main_tag,
+    column_id,
+    record_id,
+    num_records,
+    parent_column_id,
+    if_literal_value,
+    if_tag_left_hand_side,
+    if_tag_right_hand_side,
+    else_tag,
+    endif_tag
 };
 
 
-static inline bool isNumber(char c) {  // TODO: to utils
+static inline bool isNumber(const char c) {  // TODO: to utils
     return (c >= '0' && c <= '9');
 }
 
 
-static uint8_t updateNumber(const uint8_t number,
-                            const uint8_t chr) {
+static uint8_t updateValue(const uint8_t value,
+                           const uint8_t chr) {
     assert(isNumber(chr) && "invalid char");
-    assert((number < 25 || (number == 25 && chr <= '5')) && "number > 255");
-    return number * 10 + chr - '0';
+    assert((value < 25 || (value == 25 && chr <= '5')) && "number > 255");
+    return value * 10 + chr - '0';
 }
 
 
-static void increaseTokenNo(uint8_t *tokenNo) {
-    *tokenNo += 1;
-    if (*tokenNo < MAX_NUM_TOKENS) {
-        FormatTokens[*tokenNo].type = TL_INVALID;
+static void increasetokenId(uint8_t *tokenId) {
+    *tokenId += 1;
+    if (*tokenId < tl_MAX_NUM_TOKENS) {
+        Tokens[*tokenId].type = tl_invalid;
     }
 }
 
 
-static void storeText(uint8_t *tokenNo,
+static void storeText(uint8_t *tokenId,
                       const uint8_t txtStart,
                       const uint8_t txtLength) {
-    assert(*tokenNo < MAX_NUM_TOKENS);
-    FormatTokens[*tokenNo].type = TL_TEXT;
-    FormatTokens[*tokenNo].text.length = txtLength;
-    FormatTokens[*tokenNo].text.start = txtStart;
-    increaseTokenNo(tokenNo);
+    assert(*tokenId < tl_MAX_NUM_TOKENS);
+    Tokens[*tokenId].type = tl_text;
+    Tokens[*tokenId].text.length = txtLength;
+    Tokens[*tokenId].text.start = txtStart;
+    increasetokenId(tokenId);
 }
 
 
-static void storeValue(uint8_t *tokenNo,
+static void storeValue(uint8_t *tokenId,
                        const tl_tokenTypeT tokenTtype,
                        const tl_valueTypeT valueType,
-                       const uint8_t number) {
-    assert(*tokenNo < MAX_NUM_TOKENS);
-    FormatTokens[*tokenNo].type = tokenTtype;
-    FormatTokens[*tokenNo].value.type = valueType;
-    FormatTokens[*tokenNo].value.number = number;
-    increaseTokenNo(tokenNo);
+                       const uint8_t value) {
+    assert(*tokenId < tl_MAX_NUM_TOKENS);
+    Tokens[*tokenId].type = tokenTtype;
+    Tokens[*tokenId].valType = valueType;
+    Tokens[*tokenId].value = value;
+    increasetokenId(tokenId);
 }
 
 
-static void storeValidOperator(uint8_t tokenNo,
-                               ou_operatorT operator) {
-    if (operator != OU_INVALID_OPERATOR) {
-        FormatTokens[tokenNo].rhs.ifOperator = operator;
+static void storeOperatorIfValid(const uint8_t tokenId,
+                                 const ou_operatorT operator) {
+    if (operator != ou_invalid_operator) {
+        Tokens[tokenId].rhs.ifOperator = operator;
     }
 }
 
 
-static void clearFormatProperties(const uint8_t tokenNo) {
-    FormatTokens[tokenNo].value.leading0 = false;
-    FormatTokens[tokenNo].value.asHex = false;
-    FormatTokens[tokenNo].value.offset1 = false;
+//static void clearFormatProperties(const uint8_t tokenId) {
+static void clearFormatProperties(const uint8_t  tokenId) {
+    Tokens[tokenId].properties.leading0 = false;
+    Tokens[tokenId].properties.asHex = false;
+    Tokens[tokenId].properties.offset1 = false;
+    Tokens[tokenId].properties.isFixed = false;
+    Tokens[tokenId].properties.isHidden = false;
 }
 
 
-static void clearIfLhs(const uint8_t tokenNo) {
-    FormatTokens[tokenNo].lhs.elseIndex = 0;
-    FormatTokens[tokenNo].lhs.endIndex = 0;
+static bool parseText(uint8_t *tokenId,
+                      const char chr,
+                      const uint8_t charId) {
+    static uint8_t plainTxtLen = 0;
+    static uint8_t plainTxtStart = 0;
+    if (chr == RESET_TEXT_PARSER) {
+        plainTxtLen = 0;
+        plainTxtStart = 0;
+        return false;
+    }
+    if (chr == '{') {
+        if (plainTxtLen > 0) {
+            storeText(tokenId, plainTxtStart, plainTxtLen);
+            plainTxtLen = 0;
+        }
+        return true;
+    }
+    assert(chr != '}' && "stray closing brace");
+    if (plainTxtLen == 0) {
+        plainTxtStart = charId;
+    }
+    plainTxtLen++;
+    return false;
 }
 
 
-tl_formatTokenT *tl_parseFormat(const char *formatString) {
-    ou_operatorT operator = OU_INVALID_OPERATOR;
-    uint8_t number = 0;
-    uint8_t tokenNo = 0;
-    uint8_t ifTokenNo = NOT_IN_IF_TAG;
-    tl_tokenTypeT tokenType = TL_INVALID;
-    FormatTokens[0].type = TL_INVALID;
-    uint8_t state = PLAIN_TEXT;
-    uint8_t plainTxtLen = 0;
-    uint8_t plainTxtStart = 0;
+static void clearIfLhs(const uint8_t tokenId) {
+    Tokens[tokenId].lhs.elseIndex = 0;
+    Tokens[tokenId].lhs.endIndex = 0;
+}
+
+
+tl_tokenT *tl_parseFormat(const char *formatString) {
+    ou_operatorT operator = ou_invalid_operator;
+    uint8_t value = 0;
+    uint8_t tokenId = 0;
+    uint8_t iftokenId = NOT_IN_IF_TAG;
+    tl_tokenTypeT tokenType = tl_invalid;
+    Tokens[0].type = tl_invalid;
+    uint8_t state = plain_text;
+    parseText(&tokenId, RESET_TEXT_PARSER, 0);
 
     for (uint8_t i = 0; formatString[i] != '\0'; i++) {
         const char chr = formatString[i];
         assert((i < 255 || chr == '\0') && "formatString > 255 characters");
-        switch (state) {
 
-            case PLAIN_TEXT : {
-                if (chr == '{') {
-                    if (plainTxtLen > 0) {
-                        storeText(&tokenNo, plainTxtStart, plainTxtLen);
-                        plainTxtLen = 0;
-                    }
-                    number = 0;
-                    operator = OU_INVALID_OPERATOR;
-                    clearFormatProperties(tokenNo);
-                    state = START_TAG;
-                } else {
-                    assert(chr != '}' && "stray closing brace");
-                    if (plainTxtLen == 0) {
-                        plainTxtStart = i;
-                    }
-                    plainTxtLen++;
+        switch (state) {
+            case plain_text : {
+                bool tagIsFound = parseText(&tokenId, chr, i);
+                if (tagIsFound) {
+                    value = 0;
+                    operator = ou_invalid_operator;
+                    clearFormatProperties(tokenId);
+                    state = checkIfTag;
                 }
                 break;
             }
 
-            case START_TAG : {
+            case checkIfTag :
+                state = tag_prefix;
+                if (chr == '?') { // MUST be the 1st char in a tag
+                    assert(iftokenId == NOT_IN_IF_TAG
+                    && "nested ifs are invalid");
+                    clearIfLhs(tokenId);
+                    iftokenId = tokenId;
+                    tokenType = tl_if_lhs;
+                    break;
+                }
+                // intentional conditional fall through if no ? found
+
+            case tag_prefix : {
+                switch (chr) {
+                    case 'o' :
+                        Tokens[tokenId].properties.leading0 = true;
+                        break;
+                    case 'x' :
+                        Tokens[tokenId].properties.asHex = true;
+                        break;
+                    case 'h' :
+                        Tokens[tokenId].properties.isHidden = true;
+                        break;
+                    case 'f' :
+                        Tokens[tokenId].properties.isFixed = true;
+                        break;
+                    default :
+                        state = main_tag;
+                        break;
+                }
+                if (state != main_tag) {
+                    break; // intentional conditional fall-through
+                }
+            case main_tag :
                 switch (chr) {
                     case '&' :
-                        tokenType = TL_VALUE;
-                        state = COLUMN_ID;
+                        if (tokenType != tl_if_lhs) {
+                            tokenType = tl_value;
+                        }
+                        state = column_id;
                         break;
                     case '#' :
-                        tokenType = TL_VALUE;
-                        state = RECORD_ID;
+                        assert(!Tokens[tokenId].properties.asHex
+                                && !Tokens[tokenId].properties.isHidden
+                                && !Tokens[tokenId].properties.isFixed);
+                        tokenType = tl_value;
+                        state = record_id;
                         break;
                     case '*' :
-                        state = NUM_RECORDS;
+                        assert(!Tokens[tokenId].properties.asHex
+                                && !Tokens[tokenId].properties.isHidden
+                                && !Tokens[tokenId].properties.isFixed);
+                        state = num_records;
                         break;
-                    case '^' : // TODO: consider if o/x/+ properties are allowed
-                        state = PARENT_COLUMN_ID;
-                        break;
-                    case '?' :
-                        i++; // skips to '&'
-                        assert(formatString[i] == '&');
-                        assert(ifTokenNo == NOT_IN_IF_TAG && "nested ifs are invalid");
-                        clearIfLhs(tokenNo);
-                        ifTokenNo = tokenNo;
-                        state = IF_TAG_LEFT_HAND_SIDE;
+                    case '^' :
+                        assert(!Tokens[tokenId].properties.asHex
+                                && !Tokens[tokenId].properties.isHidden
+                                && !Tokens[tokenId].properties.isFixed
+                                && !Tokens[tokenId].properties.leading0);
+                        state = parent_column_id;
                         break;
                     case ':' :
-                        state = ELSE_TAG;
-                        assert(ifTokenNo != NOT_IN_IF_TAG && "else tag must follow if");
-                        break;
                     case ';' :
-                        assert(ifTokenNo != NOT_IN_IF_TAG && "endif tag must follow if");
-                        state = ENDIF_TAG;
-                        break;
-                    case 'o' : // remains in START_TAG state!
-                        FormatTokens[tokenNo].value.leading0 = true;
-                        break;
-                    case 'x' : // remains in START_TAG state!
-                        FormatTokens[tokenNo].value.asHex = true;
+                        assert(iftokenId != NOT_IN_IF_TAG
+                                && "else tag must follow if");
+                        assert(formatString[i - 1] == '{'
+                                && "invalid char in else tag");
+                        assert(formatString[i + 1] == '}'
+                                && "invalid character in ELSE or ENDIF tag");
+                        state = (chr == ':') ? else_tag : endif_tag ;
                         break;
                     default :
                         assert(0 && "Invalid first character in tag");
@@ -174,97 +230,102 @@ tl_formatTokenT *tl_parseFormat(const char *formatString) {
                 break;
             }
 
-            case COLUMN_ID :
-                if (chr == '}' ) {
-                    storeValidOperator(tokenNo, operator);
-                    storeValue(&tokenNo, tokenType, TL_VALUE_COLUMN_ID, number);
-                    state = PLAIN_TEXT;
-                } else if (chr == '+') {
-                    FormatTokens[tokenNo].value.offset1 = true;
-                } else {
-                    number = updateNumber(number, chr);
+            case column_id :
+                switch(chr) {
+                    case '}' :
+                        storeOperatorIfValid(tokenId, operator);
+                        storeValue(&tokenId, tokenType, tl_value_column_id, value);
+                        state = plain_text;
+                        break;
+                    case '+' :
+                        Tokens[tokenId].properties.offset1 = true;
+                        break;
+                    case '=' :
+                    case '>' :
+                    case '<' :
+                    case '!' :
+                        assert(tokenType == tl_if_lhs);
+                        storeValue(&tokenId, tl_if_lhs, tl_value_column_id, value);
+                        operator = ou_getOperator(&formatString[i]);
+                        assert(operator != ou_invalid_operator);
+                        if (ou_getOperatorLength(operator) == 2) {
+                            i++; // skip 2nd operator char
+                        }
+                        value = 0;
+                        tokenType = tl_if_rhs;
+                        state = if_tag_right_hand_side;
+                        break;
+                    default:
+                        value = updateValue(value, chr);
+                        break;
                 }
                 break;
 
-            case RECORD_ID :
-                if (chr == '+') {
-                    FormatTokens[tokenNo].value.offset1 = true;
-                } else {
-                    assert(chr == '}' && "invalid character in recordId tag");
-                    storeValidOperator(tokenNo, operator);
-                    storeValue(&tokenNo, tokenType, TL_VALUE_RECORD_ID, 0);
-                    state = PLAIN_TEXT;
+            case record_id :
+                switch(chr) {
+                    case '+' :
+                        Tokens[tokenId].properties.offset1 = true;
+                        break;
+                    case '}' :
+                        storeOperatorIfValid(tokenId, operator);
+                        storeValue(&tokenId, tokenType, tl_value_record_id, 0);
+                        state = plain_text;
+                        break;
+                    default :
+                        assert(0 && "invalid character in recordId tag");
+                        break;
                 }
                 break;
 
-            case NUM_RECORDS :
+            case num_records :
                 assert(chr == '}' && "invalid character in num records tag");
-                storeValue(&tokenNo, TL_VALUE, TL_VALUE_NUM_RECORDS, 0);
-                state = PLAIN_TEXT;
+                storeValue(&tokenId, tl_value, tl_value_num_records, 0);
+                state = plain_text;
                 break;
 
-            case PARENT_COLUMN_ID :
+            case parent_column_id :
                 if (chr == '}') {
-                    storeValue(&tokenNo, TL_VALUE, TL_VALUE_PARENT_COLUMN_ID, number);
-                    state = PLAIN_TEXT;
+                    storeValue(&tokenId, tl_value, tl_value_parent_column_id, value);
+                    state = plain_text;
                 } else {
-                    number = updateNumber(number, chr);
+                    value = updateValue(value, chr);
                 }
                 break;
 
-            case IF_TAG_LEFT_HAND_SIDE :
-                if (chr == '=' || chr == '>' || chr == '<'  || chr == '!' ) {
-                    storeValue(&tokenNo, TL_IF_LHS, TL_VALUE_COLUMN_ID, number);
-                    operator = ou_getOperator(&formatString[i]);
-                    assert(operator != OU_INVALID_OPERATOR);
-                    if (ou_getOperatorLength(operator) == 2) i++; // skip 2nd operator char
-                    number = 0;
-                    tokenType = TL_IF_RHS;
-                    if(isNumber(formatString[i + 1])) {
-                        state = IF_LITERAL_VALUE;
-                    } else {
-                        state = IF_TAG_RIGHT_HAND_SIDE;
-                    }
-                } else if (chr == '}') {
-                    storeValue(&tokenNo, TL_IF_LHS, TL_VALUE_COLUMN_ID, number);
-                    state = PLAIN_TEXT;
-                } else {
-                    number = updateNumber(number, chr);
-                }
-                break;
-
-            case IF_LITERAL_VALUE :
-                if (chr == '}') {
-                    storeValidOperator(tokenNo, operator);
-                    storeValue(&tokenNo, tokenType, TL_VALUE_LITERAL, number);
-                    state = PLAIN_TEXT;
-                } else {
-                    number = updateNumber(number, chr);
-                }
-                break;
-
-            case IF_TAG_RIGHT_HAND_SIDE :
+            case if_tag_right_hand_side :
                 if (chr == '#') {
-                    state = RECORD_ID;
+                    state = record_id;
                 } else if (chr == '&') {
-                    state = COLUMN_ID;
+                    state = column_id;
+                }
+                if (state != if_tag_right_hand_side) {
+                    break; // intentional conditional fall-through
+                }
+            case if_literal_value :
+                if (chr == '}') {
+                    storeOperatorIfValid(tokenId, operator);
+                    storeValue(&tokenId, tokenType, tl_value_literal, value);
+                    state = plain_text;
                 } else {
-                    assert(0 && "invalid character in if tag RHS");
+                    value = updateValue(value, chr);
                 }
                 break;
 
-            case ELSE_TAG :
-                assert(chr == '}' && "invalid character in ELSE tag");
-                assert(FormatTokens[ifTokenNo].lhs.elseIndex == 0 && "2 else tags found");
-                FormatTokens[ifTokenNo].lhs.elseIndex = tokenNo;
-                state = PLAIN_TEXT;
+            case else_tag :
+                assert(Tokens[iftokenId].lhs.elseIndex == 0
+                        && "2 else tags found");
+                Tokens[iftokenId].lhs.elseIndex = tokenId;
+                state = plain_text;
                 break;
 
-            case ENDIF_TAG :
-                assert(chr == '}' && "invalid character in ENDIF tag");
-                FormatTokens[ifTokenNo].lhs.endIndex = tokenNo;
-                ifTokenNo = NOT_IN_IF_TAG;
-                state = PLAIN_TEXT;
+            case endif_tag :
+                Tokens[iftokenId].lhs.endIndex = tokenId;
+                if(Tokens[iftokenId].lhs.elseIndex == 0) {
+                    // no else tag found, elseIndex = endIndex
+                    Tokens[iftokenId].lhs.elseIndex = tokenId;
+                }
+                iftokenId = NOT_IN_IF_TAG;
+                state = plain_text;
                 break;
 
             default :
@@ -272,12 +333,11 @@ tl_formatTokenT *tl_parseFormat(const char *formatString) {
                 break;
         }
     }
-    if (plainTxtLen > 0) {
-        // the current (=last) token was plain text that is to be saved:
-        storeText(&tokenNo, plainTxtStart, plainTxtLen);
-    }
-    assert(tokenNo > 0 && "no formatString found");
-    assert(ifTokenNo == NOT_IN_IF_TAG && "if tag without endif");
-    assert(state == PLAIN_TEXT && "missing closing brace");
-    return FormatTokens;
+    // if the current (=last) token was plain text, store it:
+    parseText(&tokenId, '{', 0);
+
+    assert(tokenId > 0 && "no formatString found");
+    assert(iftokenId == NOT_IN_IF_TAG && "if tag without endif");
+    assert(state == plain_text && "missing closing brace");
+    return Tokens;
 }
