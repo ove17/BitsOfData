@@ -7,6 +7,30 @@
  * Data values and records can be represented as strings, allowing formatting.
  */
 
+
+/* TODO:
+ *
+ * replace:
+ *  getNumColumnsInFormat
+ *  getCursorColumnFromFormat
+ *  getColumnIdFromFormat
+ * with an array of structs:
+ *
+ s tr*uct {
+ uint8_t columnId;
+ uint8_t cursorColumn;
+ uint16_t delta;
+ } columnEditPropertiesT;
+
+ struct {
+ uint8_t numColumns;
+ columnEditPropertiesT columns[20];
+ } recordEditPropertiesT;
+
+ * which is filled at each edit entry, using:
+ *  recordEditFmtT = getRecordEditFormat(tableId, recordId);
+ */
+
 #ifndef BITS_OF_DATA_TYPES_H
 #define BITS_OF_DATA_TYPES_H
 
@@ -17,7 +41,7 @@
 #define BDB_ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
 #define BDB_SELF_REFERENCE 0xFF // for BDB_columnT.ref.tableId
-#define BDB_MAX_NUM_CHILD_COLUMNS 1     // TODO: in validation.c: add check for max
+#define BDB_MAX_NUM_CHILD_COLUMNS 1 // TODO: in validation.c: add check for max
 
 
 /*

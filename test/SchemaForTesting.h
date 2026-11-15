@@ -113,8 +113,8 @@ static const BDB_tableT table2 = {
 
 
 static const BDB_columnT columnsDef3[] = {
-    {.colType = BDB_COLUMN_INT_STEP, .maxValue = 248, .defaultVal = 24, .intS = {.step = 8}},
-    {.colType = BDB_COLUMN_CHAR, .maxValue = CHARSET_MAX, .chr = {.set = charSet}},
+    {.colType = BDB_COLUMN_INTEGER, .maxValue = 99, .defaultVal = 24},
+    {.colType = BDB_COLUMN_INTEGER, .maxValue = 200},
 };
 static const BDB_recordT recordDef3 = {
     .numColumns = 2,

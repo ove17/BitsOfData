@@ -38,9 +38,12 @@
  *                   will appear on the 1st character of the following item
  *          Allowed postfixes:
  *              +   offset value by +1
+ *              /1  edit value per digit
+ *              /2  edit value per 2 digits
  *          Some pre- and postfixes may be combined:
- *                  f   with all but h
- *                  +   with all but h or x
+ *                  f   with o or x
+ *                  +   with o or f
+ *                  /i  with o or +
  *                  any other combinations are invalid.
  *
  * {#}          Index of the current record, right-aligned and padded on the
@@ -64,8 +67,9 @@
  *
  * {?&i}        Starts a conditional expression, evaluates to false if the
  *               column value == 0, false otherwise. By default the column
- *               value is editable but hidden. The cursor will appear on the
- *               first character of the following item (= the true branch!).
+ *               value is editable but hidden. When editing, the cursor will be
+ *               placed on the first character of the following item (= the true
+ *               branch!).
  *              NOTE: nested if's are NOT allowed
  *          Allowed prefixes:
  *              f   fixed value: cannot be changed. NOTE format is {?f&i}
@@ -74,12 +78,13 @@
  *
  * {?&i==RHS}   Starts a conditional expression, evaluates to true if the value
  *               of column i equals RHS, false otherwise. By default the column
- *               value is editable but hidden. The cursor will appear on the
- *               first character of the following item (= the true branch!).
+ *               value is editable but hidden. When editing, the cursor will be
+ *               placed on the first character of the following item (= the true
+ *               branch!).
  *              NOTE: nested if's are NOT allowed
- *          Allowed prefixes:
+ *          Allowed prefixes (LHS):
  *              f   fixed value: cannot be changed / edited
- *          Allowed postfixes:
+ *          Allowed postfixes (LHS):
  *              +   offset column value by +1
  *
  *          The following comparison operators are supported:

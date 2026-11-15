@@ -321,7 +321,7 @@ void BDB_writeHeader(const uint8_t tableId,
 					 const uint8_t recordId);
 
 /*
- * Writes the string representation of a database record into the write buffer.
+ * Writes the string representation of a database record to the write buffer.
  *
  * This function works identically to writeRecord, but instead of getting the
  *  format from the database schema, the user can provide a custom format. The
@@ -331,8 +331,8 @@ void BDB_writeRecordWithFormat(const uint8_t tableId,
 							   const uint8_t recordId,
 							   const char* txtFormat);
 
-//TODO:
-/* Returns the number of (editable) columns in the format string of the record,
+/*
+ * Returns the number of (editable) columns in the format string of the record,
  *  must be > 0
  * So this is NOT the number of columns in the record!
  */
@@ -340,20 +340,18 @@ uint8_t BDB_getNumEditableColumnsInFormat(const uint8_t tableId,
 										  const uint8_t recordId,
 										  const char* txtFormat);
 
-//TODO:
 /* Returns the database columnId of the column at the given index in the format
  *  string of this record.
  */
-uint8_t BDB_getColumnIdFromFormat(const uint8_t tableId,
-								  const uint8_t recordId,
-								  const uint8_t recordFormatIndex);
+uint8_t BDB_getColumnIdFromFormatIdOfFmtTxt(const uint8_t tableId,
+                                            const uint8_t recordId,
+                                            const uint8_t formatId,
+                                            const char* txtFormat);
 
-//TODO:
 /* Returns the cursorColumn determined from the column at the given index in
  *  the format string of this record.
  */
-uint8_t BDB_getCursorColumnFromFormat(const uint8_t tableId,
-									  const uint8_t recordId,
-									  const uint8_t recordFormatIndex);
-
+uint8_t BDB_getColumnIdFromFormatIdOfRecord(const uint8_t tableId,
+											const uint8_t recordId,
+											const uint8_t formatId);
 #endif

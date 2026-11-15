@@ -1,8 +1,4 @@
 /* TestTemplateLanguage.cpp
- *
- * TODO:
- *  - alle formatstrings moeten een keer aangeroepen zijn om MAX_NUM_TOKENS te
- *      checken
  */
 
 #include "CppUTest/TestHarness.h"
@@ -76,11 +72,83 @@ TEST(TemplateLanguage,
 }
 
 
+// SYNTAX_ERRORS: COLUMN_ID
+
+
+TEST(TemplateLanguage,
+      parsingColumnId_withHiddenAndFixed_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{hf&0}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{fh&0}"));
+}
+
+
+TEST(TemplateLanguage,
+      parsingColumnId_withHiddenAndOffset1_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{h&0+}"));
+}
+
+
+TEST(TemplateLanguage,
+      parsingColumnId_withHexAndOffset1_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{x&0+}"));
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withSlashAndHex_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{x&0/1}"));
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withSlashAndHidden_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{h&0/1}"));
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withSlashAndFixed_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{f&0/1}"));
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withSlash0_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{&0/0}"));
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withSlash3_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{&0/3}"));
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withSlash_withoutNumber_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{&0/}"));
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withPlusAfterSlash_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{&0/1+}"));
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withAnyCharAfterSlash1or2_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{&0/11}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{&0/10}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{&0/1/}"));
+}
+
+
 // SYNTAX_ERRORS: TEXT
 
 
 TEST(TemplateLanguage,
-      parsingTextWithStrayClosingBrace_triggersAssert) {
+      // parsingTextWithStrayClosingBrace_triggersAssert)
     CHECK_THROWS(AssertionFailure, tl_parseFormat("abc}def"));
 }
 
@@ -92,6 +160,26 @@ TEST(TemplateLanguage,
 
 
 // SYNTAX ERRORS: IF
+
+
+TEST(TemplateLanguage,
+      parsingIfLhs_withSlashPostfix_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&0/1}a{;}"));
+}
+
+
+TEST(TemplateLanguage,
+      parsingIfLhs_withPrefixBeforeQuestionmark_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{f?&1}a{;}"));
+}
+
+
+TEST(TemplateLanguage,
+      parsingIfLhs_withAnyPrefixOtherThanFixed_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?o&1}a{;}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?x&1}a{;}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?h&1}a{;}"));
+}
 
 
 TEST(TemplateLanguage,
@@ -176,42 +264,48 @@ TEST(TemplateLanguage,
 
 
 TEST(TemplateLanguage,
+      parsingIfRhs_withSlashPostfix_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==&3/1}a{;}"));
+}
+
+
+TEST(TemplateLanguage,
       parsingIf_withInvalidTagInRhs_triggersAssert) {
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==^2}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==*2}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==^2}a{;}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==*2}a{;}"));
 }
 
 
 TEST(TemplateLanguage,
       parsingIf_withPlusPostfixInRhsLiteral_triggersAssert) {
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==2+}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==2+}a{;}"));
 }
 
 
 TEST(TemplateLanguage,
       parsingIf_withAnyPrefixInRhsLiteral_triggersAssert) {
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==o12}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==x12}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==h12}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==f12}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==o12}a{;}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==x12}a{;}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==h12}a{;}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==f12}a{;}"));
 }
 
 
 TEST(TemplateLanguage,
       parsingIf_withAnyPrefixInRhsRecordId_triggersAssert) {
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==o#12}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==x#12}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==h#12}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==f#12}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==o#12}a{;}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==x#12}a{;}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==h#12}a{;}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==f#12}a{;}"));
 }
 
 
 TEST(TemplateLanguage,
       parsingIf_withAnyPrefixInRhsColumnIdId_triggersAssert) {
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==o&12}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==x&12}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==h&12}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==f&12}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==o&12}a{;}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==x&12}a{;}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==h&12}a{;}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==f&12}a{;}"));
 }
 
 
@@ -261,20 +355,6 @@ TEST(TemplateLanguage,
 }
 
 
-
-/*
- * TODO: invalid:
-
- &# #& *& &* #* *# (also ^)
-
- * TODO valid ones:
-
- o#+
- o*
-
-*/
-
-
 // TEXT
 
 
@@ -301,6 +381,13 @@ TEST(TemplateLanguage,
      parsingPlainText_returnsTokenWithTokenTypeTEXT) {
     tl_tokenT *result = tl_parseFormat("text:*&");
     BYTES_EQUAL(tl_text, result[0].type);
+}
+
+
+TEST(TemplateLanguage,
+     parsingPlainText_returnsTokenWithValueTypeNONE) {
+    tl_tokenT *result = tl_parseFormat("text:*&");
+    BYTES_EQUAL(tl_value_none, result[0].valType);
 }
 
 
@@ -422,6 +509,9 @@ TEST(TemplateLanguage,
 }
 
 
+// COLUMN_ID with LEADING0
+
+
 TEST(TemplateLanguage,
      parsingColumnId_withLeading0_returnsTokenValueWithLeading0) {
     tl_tokenT *result = tl_parseFormat("{o&1}");
@@ -436,6 +526,25 @@ TEST(TemplateLanguage,
     result = tl_parseFormat("{&2}");
     CHECK_FALSE(result[0].properties.leading0);
 }
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withLeading0andFixed_returnsTokenValueWithLeading0andFixed) {
+    tl_tokenT *result = tl_parseFormat("{of&1}");
+    CHECK_TRUE(result[0].properties.leading0);
+    CHECK_TRUE(result[0].properties.isFixed);
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withLeading0andOffset_returnsTokenValueWithLeading0andOffset) {
+    tl_tokenT *result = tl_parseFormat("{o&1+}");
+    CHECK_TRUE(result[0].properties.leading0);
+    CHECK_TRUE(result[0].properties.offset1);
+}
+
+
+// COLUMN_ID with HEX
 
 
 TEST(TemplateLanguage,
@@ -454,6 +563,9 @@ TEST(TemplateLanguage,
 }
 
 
+// COLUMN_ID with OFFSET1
+
+
 TEST(TemplateLanguage,
      parsingColumnId_withOffset_returnsTokenValueWithOffset) {
     tl_tokenT *result = tl_parseFormat("{&1+}");
@@ -467,6 +579,80 @@ TEST(TemplateLanguage,
     CHECK_TRUE(result[0].properties.offset1);
     result = tl_parseFormat("{&3}");
     CHECK_FALSE(result[0].properties.offset1);
+}
+
+
+// COLUMN_ID with /1, /2
+
+
+TEST(TemplateLanguage,
+     parsingRecordId_withoutSlash_returnsTokenWithPer0) {
+    tl_tokenT *result = tl_parseFormat("{&4}");
+    BYTES_EQUAL(0, result[0].val.editPer);
+}
+
+
+TEST(TemplateLanguage,
+     parsingRecordId_withSlash1_returnsTokenWithPer1) {
+    tl_tokenT *result = tl_parseFormat("{&4/1}");
+    BYTES_EQUAL(1, result[0].val.editPer);
+}
+
+
+TEST(TemplateLanguage,
+     parsingRecordId_withPlusSlash2_returnsTokenWithPer2andOffset1) {
+    tl_tokenT *result = tl_parseFormat("{&4+/2}");
+    BYTES_EQUAL(2, result[0].val.editPer);
+}
+
+
+TEST(TemplateLanguage,
+     parsingRecordId_withLeading0AndSlash_returnsTokenWithLeading0andSlash) {
+    tl_tokenT *result = tl_parseFormat("{o&4/1}");
+    BYTES_EQUAL(1, result[0].val.editPer);
+    CHECK_TRUE(result[0].properties.leading0);
+}
+
+
+TEST(TemplateLanguage,
+     parsingRecordId_withSlash_returnsCorrectColumnId) {
+    tl_tokenT *result = tl_parseFormat("{&4/1}");
+    BYTES_EQUAL(4, result[0].value);
+}
+
+// COLUMN_ID with HIDDEN
+
+
+TEST(TemplateLanguage,
+     parsingRecordId_withHidden_returnsTokenWithHidden) {
+    tl_tokenT *result = tl_parseFormat("{h&0}");
+    CHECK_TRUE(result[0].properties.isHidden);
+}
+
+
+// COLUMN_ID with FIXED
+
+
+TEST(TemplateLanguage,
+     parsingRecordId_withFixed_returnsTokenWithFixed) {
+    tl_tokenT *result = tl_parseFormat("{f&0}");
+    CHECK_TRUE(result[0].properties.isFixed);
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withHexandFixed_returnsTokenValueWithHexandFixed) {
+    tl_tokenT *result = tl_parseFormat("{xf&0}");
+    CHECK_TRUE(result[0].properties.isFixed);
+    CHECK_TRUE(result[0].properties.asHex);
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withFixedAndOffset_returnsTokenValueWithFixedAndOffset) {
+    tl_tokenT *result = tl_parseFormat("{f&0+}");
+    CHECK_TRUE(result[0].properties.isFixed);
+    CHECK_TRUE(result[0].properties.offset1);
 }
 
 
@@ -592,10 +778,39 @@ TEST(TemplateLanguage,
 
 
 TEST(TemplateLanguage,
-     parsingIfLhs_followedByTxt_returns2nsTokenTxt) {
+     parsingIfLhs_followedByTxt_returns2ndTokenTxt) {
     tl_tokenT *result = tl_parseFormat("{?&12}next{;}");
     BYTES_EQUAL(tl_text, result[1].type);
     BYTES_EQUAL(6, result[1].text.start);
+}
+
+
+TEST(TemplateLanguage,
+     parsingIfLhs_followedByColumnId_returns2ndTokenColumnId) {
+    tl_tokenT *result = tl_parseFormat("a{?&1}{&2}{:}c{;}\0");
+    BYTES_EQUAL(tl_value, result[2].type);
+}
+
+
+TEST(TemplateLanguage,
+     parsingIfLhs_withOffset_returnsTokenValueWithOffset) {
+    tl_tokenT *result = tl_parseFormat("{?&1+==#}{:}c{;}\0");
+    CHECK_TRUE(result[0].properties.offset1);
+}
+
+
+TEST(TemplateLanguage,
+     parsingIfLhs_withFixed_returnsTokenValueWithFixed) {
+    tl_tokenT *result = tl_parseFormat("{?f&1==#}{:}c{;}\0");
+    CHECK_TRUE(result[0].properties.isFixed);
+}
+
+
+TEST(TemplateLanguage,
+     parsingIfLhs_withFixedAndOffset_returnsTokenValueWithFixedAndOffset) {
+    tl_tokenT *result = tl_parseFormat("{?f&1+==#}{:}c{;}\0");
+    CHECK_TRUE(result[0].properties.offset1);
+    CHECK_TRUE(result[0].properties.isFixed);
 }
 
 

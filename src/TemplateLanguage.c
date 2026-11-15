@@ -58,6 +58,7 @@ static void storeText(uint8_t *tokenId,
                       const uint8_t txtLength) {
     assert(*tokenId < tl_MAX_NUM_TOKENS);
     Tokens[*tokenId].type = tl_text;
+    Tokens[*tokenId].valType = tl_value_none;
     Tokens[*tokenId].text.length = txtLength;
     Tokens[*tokenId].text.start = txtStart;
     increasetokenId(tokenId);
@@ -147,6 +148,7 @@ tl_tokenT *tl_parseFormat(const char *formatString) {
                     value = 0;
                     operator = ou_invalid_operator;
                     clearFormatProperties(tokenId);
+                    tokenType = tl_invalid;
                     state = checkIfTag;
                 }
                 break;
@@ -188,8 +190,15 @@ tl_tokenT *tl_parseFormat(const char *formatString) {
             case main_tag :
                 switch (chr) {
                     case '&' :
-                        if (tokenType != tl_if_lhs) {
+                        if (tokenType == tl_if_lhs) {
+                            assert(!Tokens[tokenId].properties.asHex
+                                    && !Tokens[tokenId].properties.isHidden
+                                    && !Tokens[tokenId].properties.leading0);
+                        } else {
+                            assert(!Tokens[tokenId].properties.isFixed
+                                    || !Tokens[tokenId].properties.isHidden);
                             tokenType = tl_value;
+                            Tokens[tokenId].val.editPer = 0;
                         }
                         state = column_id;
                         break;
@@ -238,7 +247,21 @@ tl_tokenT *tl_parseFormat(const char *formatString) {
                         state = plain_text;
                         break;
                     case '+' :
+                        assert(!Tokens[tokenId].properties.asHex
+                                && !Tokens[tokenId].properties.isHidden);
+                        assert(tokenType != tl_value
+                                || Tokens[tokenId].val.editPer == 0);
                         Tokens[tokenId].properties.offset1 = true;
+                        break;
+                    case '/' :
+                        assert(tokenType == tl_value);
+                        assert(!Tokens[tokenId].properties.asHex
+                                && !Tokens[tokenId].properties.isHidden
+                                && !Tokens[tokenId].properties.isFixed);
+                        const uint8_t editPer = formatString[i + 1] - '0';
+                        assert(editPer > 0 && editPer < 3);
+                        Tokens[tokenId].val.editPer = editPer;
+                        i++;
                         break;
                     case '=' :
                     case '>' :
@@ -256,6 +279,8 @@ tl_tokenT *tl_parseFormat(const char *formatString) {
                         state = if_tag_right_hand_side;
                         break;
                     default:
+                        assert(tokenType != tl_value
+                                || Tokens[tokenId].val.editPer == 0);
                         value = updateValue(value, chr);
                         break;
                 }
@@ -321,7 +346,7 @@ tl_tokenT *tl_parseFormat(const char *formatString) {
             case endif_tag :
                 Tokens[iftokenId].lhs.endIndex = tokenId;
                 if(Tokens[iftokenId].lhs.elseIndex == 0) {
-                    // no else tag found, elseIndex = endIndex
+                    // no else tag found, so elseIndex = endIndex :
                     Tokens[iftokenId].lhs.elseIndex = tokenId;
                 }
                 iftokenId = NOT_IN_IF_TAG;

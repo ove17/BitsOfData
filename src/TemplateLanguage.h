@@ -1,7 +1,7 @@
 /* TemplateLanguage.h
  *
  * Parser for the BDB template language (BDB-TL), its syntax is descried in
- *      include/BitsOfDataTemplates.h\
+ *      include/BitsOfDataTemplates.h
  * BDB-TL is intended to format the output of the BitsOfData database, so it is
  *  only intended to be used by programmers.
  *
@@ -62,13 +62,14 @@
 
 
 typedef enum {
+    tl_value_none,
 // values with format properties:
     tl_value_column_id,
     tl_value_record_id,
     tl_value_num_records,
 // values without format properties:
     tl_value_parent_column_id, // NOTE: inherits parent column properties
-    tl_value_literal,
+    tl_value_literal
 } tl_valueTypeT;
 
 
@@ -96,7 +97,7 @@ typedef enum {
     tl_value_record_id,
     tl_value_num_records,
     tl_value_parent_column_id, // NOTE: inherits parent column properties
-    tl_if_lhs_column_id,
+    tl_if_lhs_column_id,    // OR: lhs_solo, lhs_with_rhs??
     tl_if_rhs_column_id,
     tl_if_rhs_record_id,
     tl_if_rhs_literal
@@ -105,12 +106,15 @@ typedef enum {
 
 typedef struct {
     tl_tokenTypeT type;
-
     tl_valueTypeT valType; // TODO: could/should this be integrated into tl_tokenTypeT?
     uint8_t value;
     tl_valuePropT properties;
 
     union {
+        struct {
+            uint8_t editPer; // editing per 1, 2 digits. 0 means edit whole number
+        } val;
+
         struct {
             uint8_t start;  // index in the textFmt string
             uint8_t length;
@@ -129,41 +133,5 @@ typedef struct {
 
 
 tl_tokenT *tl_parseFormat(const char *formatString);
-
-/*
- * FIXME: overweeg:
- *
-bool tl_parseFormat(
-    const char *formatString,
-    tl_formatTokenT *tokens,
-    uint8_t maxTokens
-);
-
-
-// FIXME: voorlopig dit niet:
-typedef struct {
-    const char *fmtString; // TODO: ptr naar de string, of de txtIndex van de string?
-    uint8_t numTokens;  // FIXME: NOT needed: tl_invalid or MAX_NUM_TOKENS!
-    uint8_t numColumns;
-        / * numColumns = aantal kolomreferenties dat tijdens een specifieke
-         * uitvoering actief is. DUS kan de parser dit niet berekenen, maar
-         * wanneer de interpreter dit berekend heeft, kan deze hier wel
-         * opgeslagen worden.
-         * numColumns == 0 of == 0xFF means "not yet determined"
-         * /
-    FormatToken tokens[FORMAT_MAX_TOKENS];  // result
-} ParsedFormatT;
-
-// tp_parseFormatString(const char *fmtStr)
-
-// on the consumer side:
-(static) uint16_t evaluateFormatValue(&tl_valueT formatValue); // + db arguments?
-
-result = mu_evalCondition(
-    left,
-    token->condition.operator,
-    right
-);
-*/
 
 #endif

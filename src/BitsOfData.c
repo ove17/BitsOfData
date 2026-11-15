@@ -1017,7 +1017,53 @@ static uint16_t evaluateTokenValue(const tl_tokenT *token,
 }
 
 
+static bool evaluateCondition(const uint8_t tableId,
+                              const uint8_t recordId,
+                              uint8_t *tokenId,
+                              const tl_tokenT *tokens) {
+    tl_tokenT token = tokens[*tokenId];
+    tl_tokenT nextToken = tokens[*tokenId + 1];
+    const uint8_t columnId = token.value;
+    const uint16_t value = BDB_getValue(tableId, recordId, columnId);
+    if (nextToken.type != tl_if_rhs) {
+        return value;
+    }
+    *tokenId += 1; // skip rhs
+    const ou_operatorT ifOperator = nextToken.rhs.ifOperator;
+    const uint16_t number = evaluateTokenValue(&nextToken, tableId, recordId);
+    return ou_evalCondition(value, ifOperator, number);
+}
+
+
+
 #define NOTHING_TO_SKIP 0xFF  // only for void BDB_writeRecordWithFormat()
+
+static uint8_t SkipFromTokenId = NOTHING_TO_SKIP;
+static uint8_t SkipToTokenId = 0;
+
+
+static void setBranchToSkip(uint8_t *tokenId,
+                            const tl_tokenT token,
+                            const bool condition) {
+    if (condition) {
+        // prepare for skipping false branch later
+        SkipFromTokenId = token.lhs.elseIndex;
+        SkipToTokenId = token.lhs.endIndex;
+    } else {
+        // skip true branch directly
+        *tokenId = token.lhs.elseIndex - 1;
+    }
+}
+
+
+static uint8_t increaseTokenId(uint8_t tokenId) {
+    tokenId++;
+    if (tokenId >= SkipFromTokenId) {
+        tokenId = SkipToTokenId;
+        SkipFromTokenId = NOTHING_TO_SKIP;
+    }
+    return tokenId;
+}
 
 
 /* token interpreter
@@ -1026,14 +1072,11 @@ static uint16_t evaluateTokenValue(const tl_tokenT *token,
 void BDB_writeRecordWithFormat(const uint8_t tableId,
                                const uint8_t recordId,
                                const char* txtFormat) {
-    tl_tokenT *fmtTokens = tl_parseFormat(txtFormat);
+    tl_tokenT *tokens = tl_parseFormat(txtFormat);
     wc_setCursorPosition(0);
-    uint8_t skipFromTokenId = NOTHING_TO_SKIP;
-    uint8_t skipToTokenId = 0;
-
     uint8_t tokenId = 0;
     while (tokenId < tl_MAX_NUM_TOKENS) {
-        const tl_tokenT token = fmtTokens[tokenId];
+        const tl_tokenT token = tokens[tokenId];
         switch (token.type) {
 
             case tl_text :
@@ -1043,35 +1086,17 @@ void BDB_writeRecordWithFormat(const uint8_t tableId,
                 break;
 
             case tl_value :
-                writeTokenValue(&token, tableId, recordId);
-                break;
-
-            case tl_if_lhs :
-                const tl_tokenT nextToken = fmtTokens[tokenId + 1];
-                const uint16_t value = evaluateTokenValue(&token,
-                                                          tableId,
-                                                          recordId);
-                bool condition = false;
-                if (nextToken.type == tl_if_rhs) {
-                    const ou_operatorT ifOperator = nextToken.rhs.ifOperator;
-                    const uint16_t number = evaluateTokenValue(&nextToken,
-                                                               tableId,
-                                                               recordId);
-                    condition = ou_evalCondition(value, ifOperator, number);
-                    tokenId++; // skip rhs
-                } else { //no rhs found
-                    condition = value;
-                }
-                if (condition) {
-                    // prepare for skipping false later
-                    skipFromTokenId = token.lhs.elseIndex;
-                    skipToTokenId = token.lhs.endIndex;
-                } else {
-                    // skip true directly
-                    tokenId = token.lhs.elseIndex - 1;
+                if (!token.properties.isHidden) {
+                    writeTokenValue(&token, tableId, recordId);
                 }
                 break;
 
+            case tl_if_lhs : {
+                const bool condition = evaluateCondition(tableId, recordId,
+                                                         &tokenId, tokens);
+                setBranchToSkip(&tokenId, token, condition);
+                break;
+            }
             case tl_invalid :
                 tokenId = tl_MAX_NUM_TOKENS;
                 break;
@@ -1079,11 +1104,7 @@ void BDB_writeRecordWithFormat(const uint8_t tableId,
             default :
                 assert(0 && "invalid token type");
         }
-        tokenId++;
-        if (tokenId >= skipFromTokenId) {
-            tokenId = skipToTokenId;
-            skipFromTokenId = NOTHING_TO_SKIP;
-        }
+        tokenId = increaseTokenId(tokenId);
     }
     const uint8_t maxLen = DbaseDef->maxStringBufferSize;
     while (wc_getCursorPosition() < maxLen) {
@@ -1117,18 +1138,128 @@ void BDB_writeHeader(const uint8_t tableId,
 uint8_t BDB_getNumEditableColumnsInFormat(const uint8_t tableId,
                                           const uint8_t recordId,
                                           const char* txtFormat) {
-    return 1;
+    const tl_tokenT *tokens = tl_parseFormat(txtFormat);
+    uint8_t numEditableColumns = 0;
+    uint8_t tokenId = 0;
+    while (tokenId < tl_MAX_NUM_TOKENS) {
+        tl_tokenT token = tokens[tokenId];
+        switch(token.type) {
+            case tl_invalid :
+                tokenId = tl_MAX_NUM_TOKENS;
+                break;
+            case tl_if_lhs :
+                const bool condition = evaluateCondition(tableId, recordId,
+                                                         &tokenId, tokens);
+                setBranchToSkip(&tokenId, token, condition);
+                if (condition && !token.properties.isFixed) {
+                    numEditableColumns++;
+                }
+                break;
+            case tl_value :
+                if (token.valType != tl_value_column_id
+                        || token.properties.isFixed) {
+                    break;
+                }
+                if (token.properties.isHidden) {
+                    numEditableColumns += 1;
+                    break;
+                }
+                const uint8_t columnId = token.value;
+                const BDB_recordT* recordDef =
+                        getRecordDefFromBuffer(tableId, recordId);
+                const BDB_columnT* columnDef = getColumnDef(recordDef,
+                                                            columnId);
+                const uint16_t maxValue = columnDef->maxValue;
+                if (maxValue > 100) {
+                    const uint8_t numDigits = mu_getNumDigits(maxValue);
+                    numEditableColumns += numDigits;
+                } else {
+                    numEditableColumns += 1;
+                }
+                break;
+            default :
+                break;
+        }
+        tokenId = increaseTokenId(tokenId);
+    }
+    return numEditableColumns;
 }
 
 
-/* Returns the number of editable columns in the format string of the record, must be > 0
- * So this is NOT the number of columns in the record!
- */
-uint8_t BDB_getNumEditableColumn(const uint8_t tableId,
-                                 const uint8_t recordId) {
+uint8_t BDB_getNumEditableColumns(const uint8_t tableId,
+                                  const uint8_t recordId) {
     assert(GetTxtPtr != NULL); // this function relies on static text
     const BDB_recordT* recordDef = getRecordDefFromBuffer(tableId, recordId);
     const char* txtFormat = NULL;
     GetTxtPtr(&txtFormat, recordDef->txtFormat);
     return BDB_getNumEditableColumnsInFormat(tableId, recordId, txtFormat);
+}
+
+
+//TODO: traverseTokens with callback
+uint8_t BDB_getColumnIdFromFormatIdOfFmtTxt(const uint8_t tableId,
+                                            const uint8_t recordId,
+                                            const uint8_t formatId,
+                                            const char* txtFormat) {
+    const tl_tokenT *tokens = tl_parseFormat(txtFormat);
+    uint8_t editableColumnCount = 0;
+    uint8_t tokenId = 0;
+    while (tokenId < tl_MAX_NUM_TOKENS) {
+        tl_tokenT token = tokens[tokenId];
+        switch(token.type) {
+            case tl_invalid :
+                tokenId = tl_MAX_NUM_TOKENS;
+                break;
+/*            case tl_if_lhs :
+                const bool condition = evaluateCondition(tableId, recordId,
+                                                         &tokenId, tokens);
+                setBranchToSkip(&tokenId, token, condition);
+                if (condition && !token.properties.isFixed) {
+                    editableColumnCount++;
+                }
+                break;*/
+            case tl_value :
+                if (token.valType != tl_value_column_id
+                        || token.properties.isFixed) {
+                    break;
+                }
+                if (token.properties.isHidden) {
+                    editableColumnCount += 1;
+                    break;
+                }
+                const uint8_t columnId = token.value;
+                const BDB_recordT* recordDef =
+                getRecordDefFromBuffer(tableId, recordId);
+                const BDB_columnT* columnDef = getColumnDef(recordDef,
+                                                            columnId);
+                const uint16_t maxValue = columnDef->maxValue;
+                if (maxValue > 100) {
+                    const uint8_t numDigits = mu_getNumDigits(maxValue);
+                    editableColumnCount += numDigits;
+                } else {
+                    editableColumnCount += 1;
+                }
+                break;
+            default :
+                break;
+        }
+        if (editableColumnCount >= formatId + 1) {
+            return token.value;
+        }
+        tokenId = increaseTokenId(tokenId);
+    }
+    assert(0 && "columnId not found");
+    return 0;
+}
+
+
+uint8_t BDB_getColumnIdFromFormatIdOfRecord(const uint8_t tableId,
+                                            const uint8_t recordId,
+                                            const uint8_t formatId) {
+    assert(GetTxtPtr != NULL); // this function relies on static text
+    const BDB_recordT* recordDef = getRecordDefFromBuffer(tableId, recordId);
+    const char* txtFormat = NULL;
+    GetTxtPtr(&txtFormat, recordDef->txtFormat);
+    return BDB_getColumnIdFromFormatIdOfFmtTxt(tableId, recordId,
+                                               formatId, txtFormat);
 }
