@@ -77,6 +77,7 @@ typedef struct {
     bool leading0;
     bool offset1;
     bool asHex;
+    bool asPercentage;
     bool isHidden;
     bool isFixed;
 } tl_valuePropT;

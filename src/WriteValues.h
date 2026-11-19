@@ -1,5 +1,4 @@
-/*
- * WriteColumns.h
+/* WriteValues.h
  *
  * This is a private API from BitsOfData, it is NOT intended to be called
  *  directly or used stand-alone.
@@ -15,8 +14,8 @@
  *  higher level text functions in BitsOfData.
  */
 
-#ifndef WRITE_COLUMNS_H
-#define WRITE_COLUMNS_H
+#ifndef WRITE_VALUES_H
+#define WRITE_VALUES_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -25,38 +24,39 @@
 /*
  * Allocates the writeBuffer
  */
-void wc_initBuffer(const uint8_t size);
+void wv_initBuffer(const uint8_t size);
 
 /*
  * Frees the writeBuffer
  */
-void wc_freeBuffer(void);
+void wv_freeBuffer(void);
 
 /*
  * Returns a pointer to the writeBuffer.
  * This buffer can also be written to by the caller.
  */
-char* wc_getWriteBuffer(void);
+char* wv_getWriteBuffer(void);
 
 /*
  * Sets the writeBuffer cursor position.
  */
-void wc_setCursorPosition(const uint8_t position);
+void wv_setCursorPosition(const uint8_t position);
 
 /*
  * Returns the current writeBuffer cursor position.
  */
-uint8_t wc_getCursorPosition(void);
+uint8_t wv_getCursorPosition(void);
 
 /*
  * Writes an integer value to the writeBuffer at the current cursor position.
  * The value is written right-aligned and filled on the left with spaces or
  *  zeros, depending on leading0.
- * If the integer does not fit in numDigits, it will be truncated on the left.
+ * If the integer does not fit in the same number of digits as maxValue, it will
+ *  be truncated on the left.
  * On exit, the cursor position is at the next index.
  */
-void wc_writeInteger(uint16_t value,
-                     const uint8_t numDigits,
+void wv_writeInteger(uint16_t value,
+                     const uint16_t maxValue,
                      const bool leading0);
 
 /*
@@ -66,7 +66,7 @@ void wc_writeInteger(uint16_t value,
  * If the integer does not fit, it will be truncated on the left.
  * On exit, the cursor position is at the next index.
  */
-void wc_writeHex(uint16_t value,
+void wv_writeHex(uint16_t value,
                  const uint16_t maxValue);
 
 /*
@@ -77,8 +77,8 @@ void wc_writeHex(uint16_t value,
  * If the number does not fit in numDigits, it will be truncated on the left.
  * On exit, the cursor position is at the next index.
  */
-void wc_writeDecimal(uint16_t value,
-                     const uint8_t numDigits,
+void wv_writeDecimal(uint16_t value,
+                     const uint16_t maxValue,
                      const uint8_t decimalShift,
                      const bool leading0);
 
@@ -89,7 +89,7 @@ void wc_writeDecimal(uint16_t value,
  *  character set, which is a 0-terminated string.
  * On exit, the cursor position is at the next index.
  */
-void wc_writeChar(const char charIndex,
+void wv_writeChar(const char charIndex,
                   const char* charSet);
 
 /*
@@ -98,7 +98,7 @@ void wc_writeChar(const char charIndex,
  * If the string is shorter than length, it will be padded with spaces.
  * On exit, the cursor position is at the next index.
  */
-void wc_writeTxt(const char* txt,
+void wv_writeTxt(const char* txt,
                  const uint8_t length);
 
 #endif

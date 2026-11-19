@@ -7,30 +7,6 @@
  * Data values and records can be represented as strings, allowing formatting.
  */
 
-
-/* TODO:
- *
- * replace:
- *  getNumColumnsInFormat
- *  getCursorColumnFromFormat
- *  getColumnIdFromFormat
- * with an array of structs:
- *
- s tr*uct {
- uint8_t columnId;
- uint8_t cursorColumn;
- uint16_t delta;
- } columnEditPropertiesT;
-
- struct {
- uint8_t numColumns;
- columnEditPropertiesT columns[20];
- } recordEditPropertiesT;
-
- * which is filled at each edit entry, using:
- *  recordEditFmtT = getRecordEditFormat(tableId, recordId);
- */
-
 #ifndef BITS_OF_DATA_TYPES_H
 #define BITS_OF_DATA_TYPES_H
 
@@ -42,6 +18,7 @@
 
 #define BDB_SELF_REFERENCE 0xFF // for BDB_columnT.ref.tableId
 #define BDB_MAX_NUM_CHILD_COLUMNS 1 // TODO: in validation.c: add check for max
+#define BDB_MAX_NUM_EDITABLE_FIELDS 20
 
 
 /*
@@ -56,8 +33,6 @@
  */
 typedef enum {
     BDB_COLUMN_INTEGER,         // the default coltype
-    BDB_COLUMN_PERCENTAGE,      // percentage of .maxValue
-    BDB_COLUMN_INT_STEP,        // an integer that increases by a step value
     BDB_COLUMN_DECIMAL,         // introduces a decimal point
     BDB_COLUMN_RECORD_TYPE,	    // for variable record types
     BDB_COLUMN_TXT_LIST,        // the value is an index to a list of strings
@@ -65,10 +40,10 @@ typedef enum {
                                 //  in another table
     BDB_COLUMN_CHAR,            // the value is the index of a character set
     BDB_COLUMN_CHILD_TABLE,     // the value is the tableId of another table
-    BDB_COLUMN_REFERENCE,	    // the value is the recordId of another table
+    BDB_COLUMN_REFERENCE,	    // the value is the recordId in another table
 // the following columns are virtual and hold no data:
     BDB_COLUMN_STRING,		    // virtual column that points to CHAR columns
-    BDB_COLUMN_VIRTUAL,		    // points to column in another table
+    BDB_COLUMN_VIRTUAL,		    // points to a column in another table
     BDB_COLUMN_TXT_LIST_CLONE,  // writes value from another column as TXT_LIST
 } BDB_colTypeT;
 
@@ -84,56 +59,26 @@ typedef struct {
     uint16_t maxValue;
     uint16_t defaultVal;
 
-    uint8_t valueColumn; // FIXME: column for BDB_COLUMN_TXT_LIST_CLONE
-
     union {
 /* BDB_COLUMN_INTEGER:
  *
- * This is the default column type
+ * This is the default column type.
+ * Numeric value that can only be a multiple of .int.step, if .int.step = 0 or 1
+ *  it is a normal integer.
  *
  * Constraints:
- *      minValue, defaultVal, maxValue
+ *      If step > 1:
+ *          minValue, defaultVal, maxValue: MUST all be divisible by .int.step
  *
  * getValue:                returns actual value
- * setValue, changeValue:   act directly on the data value
- * writeValue:              right-aligned numerical value
- *
- * No parameters:  */
-
-        // no struct!
-
-/* BDB_COLUMN_PERCENTAGE:
- *
- * Numeric value that is a % of .maxValue
- *
- * Constraints:
- *      minValue, defaultVal, maxValue
- *
- * getValue:                returns actual integer value
- * setValue, changeValue:   act directly on the data value
- * writeValue:              right-aligned numerical value between
- *                          100* .minValue/.maxValue and 100 * value/.maxValue
- *
- * No parameters
- */
-        // no struct!
-
-/* BDB_COLUMN_INT_STEP:
- *
- * Numeric value that can only be a multiple of .intStep
- *
- * Constraints:
- *      minValue, defaultVal, maxValue: MUST all be divisible by .intStep
- *
- * getValue:                returns actual value
- * setValue:                must be divisible by .intStep
- * changeValue:             changeValue by 1 increases value by .intStep
+ * setValue:                must be divisible by .int.step
+ * changeValue:             changeValue by 1 increases value by .int.step
  * writeValue:              right-aligned numerical value
  *
  * Parameters:  */
         struct {
             int8_t step;
-        } intS;
+        } intg;
 
 /* BDB_COLUMN_DECIMAL:
  *
@@ -212,10 +157,10 @@ typedef struct {
  *  between a record of this table and an entire other table
  *
  * All tables in the target range (as set by minValue, maxValue) MUST have the
- * following two parameters set:
+ * following two parameters:
  *      .parentTableId
  *      .parentChildColumnId
- * to the table, column of the current BDB_COLUMN_CHILD_TABLE
+ * set to the (table, column) of the current BDB_COLUMN_CHILD_TABLE
  *
  * Constraints:
  *      defaultVal must not be set, it is set automatically
@@ -278,6 +223,26 @@ typedef struct {
             uint8_t refCol;     // columnId of REFERENCE_COLUMN in the same table
             uint8_t columnId;   // columnId of target column in referenced table
         } copy;
+
+
+/* BDB_COLUMN_TXT_LIST_CLONE:
+ *
+ * A value from a different column (valueColumn) uses the columnDef of the
+ *  current column.
+ *
+ * Constraints: none, no data
+ *
+ * getValue:                n/a
+ * setValue, changeValue:   n/a
+ * writeValue:              returns the string representation of the value
+ *                          in valueColumn, using the the column properties
+ *                          of the current column
+ *
+ * Parameters:  */
+        struct {
+            uint8_t valueColumn;
+        } clone;
+
 
 /* BDB_COLUMN_STRING:
  *
@@ -367,6 +332,21 @@ typedef struct {
     const BDB_tableT* tables;
     uint8_t maxStringBufferSize;      // for writeColumns functions
 } BDB_dbaseDefT;
+
+
+/* Holds the properties for editing a single field in the recordFormat string
+ */
+typedef struct {
+    uint8_t columnId;       // columnId in the database
+    uint8_t cursorPos;      // cursor x location on the diplay
+    uint16_t editStep;      // step amount to change columnId's value by
+} BDB_fieldPropertiesT;
+
+
+typedef struct {
+    uint8_t numFields;
+    BDB_fieldPropertiesT fields[BDB_MAX_NUM_EDITABLE_FIELDS];
+} BDB_recordFieldPropertiesT;
 
 
 #endif

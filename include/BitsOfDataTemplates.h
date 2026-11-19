@@ -32,17 +32,19 @@
  *               if it is text.
  *          Allowed prefixes:
  *              o   left-padded with zeroes instead of spaces
- *              x   show as hexadecimal value instead of integer
  *              f   fixed value: cannot be changed / edited
  *              h   hidden: value is invisible, but can be edited, the cursor
  *                   will appear on the 1st character of the following item
  *          Allowed postfixes:
- *              +   offset value by +1
+ *              +   show value offset by +1
+ *              %   show value as percentage of its maxValue
+ *              x   show as hexadecimal value
  *              /1  edit value per digit
  *              /2  edit value per 2 digits
  *          Some pre- and postfixes may be combined:
  *                  f   with o or x
  *                  +   with o or f
+ *                  %   with o or f
  *                  /i  with o or +
  *                  any other combinations are invalid.
  *
@@ -111,7 +113,7 @@
  * {&i+}        String representation of column i in the current record,
  *               offset by 1
  *
- * {x&i}        String representation of column i in the current record, in
+ * {&ix}        String representation of column i in the current record, in
  *               hexadecimal format, takes up the full width with leading 0's
  *
  * {o#}         Index of the current record, right-aligned and padded on the

@@ -89,6 +89,7 @@ static void storeOperatorIfValid(const uint8_t tokenId,
 static void clearFormatProperties(const uint8_t  tokenId) {
     Tokens[tokenId].properties.leading0 = false;
     Tokens[tokenId].properties.asHex = false;
+    Tokens[tokenId].properties.asPercentage = false;
     Tokens[tokenId].properties.offset1 = false;
     Tokens[tokenId].properties.isFixed = false;
     Tokens[tokenId].properties.isHidden = false;
@@ -171,9 +172,9 @@ tl_tokenT *tl_parseFormat(const char *formatString) {
                     case 'o' :
                         Tokens[tokenId].properties.leading0 = true;
                         break;
-                    case 'x' :
+/*                    case 'x' :
                         Tokens[tokenId].properties.asHex = true;
-                        break;
+                        break;*/
                     case 'h' :
                         Tokens[tokenId].properties.isHidden = true;
                         break;
@@ -257,11 +258,24 @@ tl_tokenT *tl_parseFormat(const char *formatString) {
                         assert(tokenType == tl_value);
                         assert(!Tokens[tokenId].properties.asHex
                                 && !Tokens[tokenId].properties.isHidden
-                                && !Tokens[tokenId].properties.isFixed);
+                                && !Tokens[tokenId].properties.isFixed
+                                && !Tokens[tokenId].properties.asPercentage);
                         const uint8_t editPer = formatString[i + 1] - '0';
                         assert(editPer > 0 && editPer < 3);
                         Tokens[tokenId].val.editPer = editPer;
                         i++;
+                        break;
+                    case 'x' :
+                        assert(!Tokens[tokenId].properties.offset1);
+                        assert(tokenType == tl_value);
+                        Tokens[tokenId].properties.asHex = true;
+                        break;
+                    case '%' :
+                        assert(!Tokens[tokenId].properties.asHex
+                                && !Tokens[tokenId].properties.offset1
+                                && !Tokens[tokenId].properties.isHidden);
+                        assert(tokenType == tl_value);
+                        Tokens[tokenId].properties.asPercentage = true;
                         break;
                     case '=' :
                     case '>' :
@@ -281,6 +295,7 @@ tl_tokenT *tl_parseFormat(const char *formatString) {
                     default:
                         assert(tokenType != tl_value
                                 || Tokens[tokenId].val.editPer == 0);
+                        assert(!Tokens[tokenId].properties.asPercentage);
                         value = updateValue(value, chr);
                         break;
                 }

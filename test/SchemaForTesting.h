@@ -74,7 +74,7 @@ static const BDB_columnT columnsDef1[] = {
     recordTypeColumn,
     {.maxValue = 85, .defaultVal = 45, .minValue = 5},
     {.colType = BDB_COLUMN_REFERENCE, .maxValue = maxNumRecordsInTable2 - 1, .ref = {.tableId = 2},},
-    {.colType = BDB_COLUMN_PERCENTAGE, .maxValue = 25, .defaultVal = 10},
+    {.colType = BDB_COLUMN_INTEGER, .maxValue = 25, .defaultVal = 10}, // was PERCENTAGE
     {.colType = BDB_COLUMN_VIRTUAL, .virt = {.refCol = 2, .valueCol = 1}},
 };
 static const BDB_recordT recordDef1 = {
@@ -90,7 +90,7 @@ static const BDB_tableT table1 = {
 };
 
 static const BDB_columnT columnsDef2[] = {
-    {.colType = BDB_COLUMN_INT_STEP, .maxValue = 248, .defaultVal = 24, .intS = {.step = 8}},
+    {.colType = BDB_COLUMN_INTEGER, .maxValue = 248, .defaultVal = 24, .intg = {.step = 8}},
     {.colType = BDB_COLUMN_CHAR, .maxValue = CHARSET_MAX, .chr = {.set = charSet}},
     {.colType = BDB_COLUMN_CHAR, .maxValue = CHARSET_MAX, .chr = {.set = charSet}},
     {.colType = BDB_COLUMN_CHAR, .maxValue = CHARSET_MAX, .chr = {.set = charSet}},

@@ -12,7 +12,8 @@
 #define ASSERT_VALID(cond) \
 do { \
     if (!(cond)) { \
-        printf("\nINVALID SCHEMA @ TableId=%i RedDefId=%i Col=%i\n\n", TableId, RecDefId, Col);\
+        printf("\nINVALID SCHEMA @ TableId=%i RedDefId=%i Col=%i\n\n", \
+               TableId, RecDefId, Col);\
         assert(cond); \
     } \
 } while (0)
@@ -27,18 +28,12 @@ static void assertIntegerColumnIsValid(const BDB_columnT* columnDef) {
     assert(columnDef->maxValue > columnDef->minValue);
     assert(columnDef->defaultVal >= columnDef->minValue);
     assert(columnDef->defaultVal <= columnDef->maxValue);
-}
-
-
-static void assertIntStepColumnIsValid(const BDB_columnT* columnDef) {
-    assert(columnDef->maxValue > columnDef->minValue);
-    assert(columnDef->defaultVal >= columnDef->minValue);
-    assert(columnDef->defaultVal <= columnDef->maxValue);
-    const uint8_t step = columnDef->intS.step;
-    assert(step > 1);
-    // step must not cause remainder:
-    assert((columnDef->maxValue - columnDef->minValue) % step == 0);
-    assert((columnDef->defaultVal - columnDef->minValue) % step == 0);
+    const uint8_t step = columnDef->intg.step;
+    if (step > 1) {
+        // step must not cause remainder:
+        assert((columnDef->maxValue - columnDef->minValue) % step == 0);
+        assert((columnDef->defaultVal - columnDef->minValue) % step == 0);
+    }
 }
 
 
@@ -49,7 +44,7 @@ static void assertDecimalColumnIsValid(const BDB_columnT* columnDef) {
     assert(columnDef->dec.shift > 0);
     assert(columnDef->dec.shift <= 5); // arbitrary? or practical?
     const uint8_t step = columnDef->dec.step;
-    assert(step == 1 || step == 2 || step == 5); // NOTE: step == 0 would cause div/0
+    assert(step == 1 || step == 2 || step == 5); // NOTE: step == 0 causes div/0
     // step must not cause remainder:
     assert((columnDef->maxValue - columnDef->minValue) % step == 0);
     assert((columnDef->defaultVal - columnDef->minValue) % step == 0);
@@ -95,10 +90,12 @@ static uint8_t getMinNumColumns(const BDB_tableT* tableDef) {
 static void assertChildTableColumnIsValid(const BDB_dbaseDefT* dbaseDef,
                                           const BDB_tableT* tableDef,
                                           const BDB_columnT* columnDef) {
-    assert(tableDef->numRecordDefs == 1); // child table is not allowed in variable record type table
+    assert(tableDef->numRecordDefs == 1);   // child table is not allowed in
+                                            //  variable record type table
     assert(columnDef->maxValue < dbaseDef->numTables);
     assert(columnDef->minValue < columnDef->maxValue);
-    assert(columnDef->defaultVal == 0); // no default allowed, automatic assignment
+    assert(columnDef->defaultVal == 0); // no default allowed, automatic
+                                        //  assignment
     assert(tableDef->maxNumRecords == columnDef->maxValue - columnDef->minValue + 1);
     for (uint8_t tableId = (uint8_t)columnDef->minValue; tableId <= (uint8_t)columnDef->maxValue; tableId++) {
         assert(dbaseDef->tables[tableId].hasParent == true);
@@ -167,8 +164,9 @@ static void assertCopyColumnIsValid(const BDB_dbaseDefT* dbaseDef,
     const BDB_tableT* refTableDef = &dbaseDef->tables[refTableId];
     uint8_t minNumColumns = getMinNumColumns(refTableDef);
     assert(columnDef->copy.columnId < minNumColumns);
-// maxValue must be highest maxValue in the target column of each variable record def:
-    const uint8_t highestMaxValue = getHighestMaxValue(refTableDef, columnDef->copy.columnId);
+// maxValue must be highest maxValue in the target column of each var. record def:
+    const uint8_t highestMaxValue = getHighestMaxValue(refTableDef,
+                                                       columnDef->copy.columnId);
     assert(columnDef->maxValue == highestMaxValue);
 }
 
@@ -230,12 +228,7 @@ void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef) {
                 const BDB_columnT* columnDef = &recordDef->columns[Col];
                 switch(columnDef->colType) {
                     case BDB_COLUMN_INTEGER :
-                    case BDB_COLUMN_PERCENTAGE :
                         assertIntegerColumnIsValid(columnDef);
-                        ASSERT_VALID(!virtualColumnPresent);
-                        break;
-                    case BDB_COLUMN_INT_STEP :
-                        assertIntStepColumnIsValid(columnDef);
                         ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_DECIMAL :
@@ -247,15 +240,21 @@ void assertDbaseDefIsValid(const BDB_dbaseDefT* dbaseDef) {
                         ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_CHILD_TABLE :
-                        assertChildTableColumnIsValid(dbaseDef, tableDef, columnDef);
+                        assertChildTableColumnIsValid(dbaseDef,
+                                                      tableDef,
+                                                      columnDef);
                         ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_REFERENCE :
-                        assertReferenceColumnIsValid(dbaseDef, tableDef, columnDef);
+                        assertReferenceColumnIsValid(dbaseDef,
+                                                     tableDef,
+                                                     columnDef);
                         ASSERT_VALID(!virtualColumnPresent);
                         break;
                     case BDB_COLUMN_VIRTUAL :
-                        assertVirtualColumnIsValid(dbaseDef, recordDef, columnDef);
+                        assertVirtualColumnIsValid(dbaseDef,
+                                                   recordDef,
+                                                   columnDef);
                         virtualColumnPresent = true;
                         break;
                     case BDB_COLUMN_TXT_LIST_COPY :

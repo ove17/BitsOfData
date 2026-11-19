@@ -110,7 +110,7 @@ TEST(RecordCodec, getRecordSizeOnDecimalRecordWithStepIsReduced) {
 
 TEST(RecordCodec, getRecordSizeOnIntStepRecordIsReduced) {
     static const BDB_columnT columns[] = {
-        {.colType = BDB_COLUMN_INT_STEP, .minValue = 50, .maxValue = 4130, .intS = {.step = 16}},
+        {.colType = BDB_COLUMN_INTEGER, .minValue = 50, .maxValue = 4130, .intg = {.step = 16}},
     };
     static const BDB_recordT recordDef = {
         .numColumns = 1,
@@ -303,7 +303,7 @@ TEST(RecordCodec, encodingIntStepColumnsThenDecodingReturnsSameValue) {
     const uint16_t recordData[] = {1000, 170};
     uint8_t rawRecord[3] = { 0 };
     static const BDB_columnT columns[] = {
-        {.colType = BDB_COLUMN_INT_STEP, .minValue = 8, .maxValue = 2040, .intS = {.step = 8}},
+        {.colType = BDB_COLUMN_INTEGER, .minValue = 8, .maxValue = 2040, .intg = {.step = 8}},
         {.maxValue = 255},
     };
     static const BDB_recordT recordDef = {

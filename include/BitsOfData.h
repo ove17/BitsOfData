@@ -141,10 +141,6 @@ bool BDB_setRecord(const uint8_t tableId,
 				   const uint8_t recordId,
 				   const uint16_t* data);
 
-/* Returns true if a table has variable record type, false if it is constant.
- */
-bool BDB_isRecordTypeVariable(const uint8_t tableId);
-
 
 // Managing columns:
 // =================
@@ -263,7 +259,7 @@ uint8_t BDB_getChildTable(const uint8_t recordId);
  * The buffer size is defined by maxStringBufferSize in the database schema
  *  (see BitsOfDataTypes.h).
  *
- * This buffer is filled by BDB_writeValue() and BDB_writeRecord().
+ * This buffer is filled by BDB_write*().
  *
  * The pointer remains valid until BDB_closeDataBase().
  * The contents may be overwritten by subsequent write operations.
@@ -303,7 +299,6 @@ uint8_t BDB_writeValue(const uint8_t tableId,
 void BDB_writeRecord(const uint8_t tableId,
 					 const uint8_t recordId);
 
-
 /*
  * Writes the string representation of a database table header to the write buffer.
  *
@@ -321,37 +316,12 @@ void BDB_writeHeader(const uint8_t tableId,
 					 const uint8_t recordId);
 
 /*
- * Writes the string representation of a database record to the write buffer.
- *
- * This function works identically to writeRecord, but instead of getting the
- *  format from the database schema, the user can provide a custom format. The
- *  caller is responsible for providing a \0 terminated string.
+ * Returns a pointer to a BDB_recordFieldPropertiesT struct that contains the
+ *  properties of all editable fields in the txtFormat of the record.
+ * The result remains valid until the next call to this function with different
+ *  arguments. The pointer will remain valid for the duration of the program.
  */
-void BDB_writeRecordWithFormat(const uint8_t tableId,
-							   const uint8_t recordId,
-							   const char* txtFormat);
+BDB_recordFieldPropertiesT *BDB_getRecordFields(const uint8_t tableId,
+												const uint8_t recordId);
 
-/*
- * Returns the number of (editable) columns in the format string of the record,
- *  must be > 0
- * So this is NOT the number of columns in the record!
- */
-uint8_t BDB_getNumEditableColumnsInFormat(const uint8_t tableId,
-										  const uint8_t recordId,
-										  const char* txtFormat);
-
-/* Returns the database columnId of the column at the given index in the format
- *  string of this record.
- */
-uint8_t BDB_getColumnIdFromFormatIdOfFmtTxt(const uint8_t tableId,
-                                            const uint8_t recordId,
-                                            const uint8_t formatId,
-                                            const char* txtFormat);
-
-/* Returns the cursorColumn determined from the column at the given index in
- *  the format string of this record.
- */
-uint8_t BDB_getColumnIdFromFormatIdOfRecord(const uint8_t tableId,
-											const uint8_t recordId,
-											const uint8_t formatId);
 #endif

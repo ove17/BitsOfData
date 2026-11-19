@@ -1,15 +1,14 @@
 /* TestBitsOfData.cpp
  *
  * TODO:
+ *  move some tests to TestDbaseEngine.cpp
  *  check if (all) tests also work if recId != 0 ?
  */
 
-//#include "CppUTest/TestHarness.h"
 #include "cpputestUtils.h"
 
 extern "C" {
     #include "EeHw.h"
-//    #include "EeHwX86.h"
     #include "BitsOfData.h"
     #include "RecordStore.h"
     #include "SchemaForTesting.h"
@@ -131,7 +130,7 @@ TEST(UseDbase, setValueOnVariableRecDefChangesBuffer) {
     BDB_insertRecordAfter(1, 0);
     CHECK_TRUE(BDB_setValue(1, 0, 0, 0)); // set recordType to 0
     CHECK_TRUE(BDB_setValue(1, 1, 0, 1)); // set recordType to 1
-    CHECK_TRUE(BDB_setValue(1, 0, 1, 4)); // min value is below that of recordType 1
+    CHECK_TRUE(BDB_setValue(1, 0, 1, 4)); // min value is below recordType 1
     LONGS_EQUAL(4, BDB_getValue(1, 0, 1));
 }
 
@@ -316,7 +315,7 @@ TEST(UseDbase, retrievingDifferentRecordsInTheSameTableConsecutivelyWorks) {
 
 // variable recordDefs
 
-
+/*
 TEST(UseDbase,
      isRecordTypeVariable_returnsTrueOnTableWithVRT) {
     CHECK_TRUE(BDB_isRecordTypeVariable(1));
@@ -326,7 +325,7 @@ TEST(UseDbase,
 TEST(UseDbase,
      isRecordTypeVariable_returnsFalseOnTableWithoutVRT) {
     CHECK_FALSE(BDB_isRecordTypeVariable(2));
-}
+}*/
 
 
 TEST(UseDbase, inVariableRecordDefTable_The1stColumnHoldsTheRecordDef) {
@@ -784,18 +783,7 @@ TEST(UseDbase, writeValueOf1DigitIntReturnsStringOfMaxLength) {
 }
 
 
-// BDB_COLUMN_PERCENTAGE
-
-
-TEST(UseDbase, writeValueOfPercentageReturnsPercentage) {
-    BDB_setValue(1, 0, 0, 1);
-    BYTES_EQUAL(10, BDB_getValue(1, 0, 3));
-    BYTES_EQUAL(3, BDB_writeValue(1, 0, 3, 0));
-    STRNCMP_EQUAL(" 40", BDB_getWriteBuffer(), 3);
-}
-
-
-// BDB_COLUMN_INT_STEP
+// BDB_COLUMN_INTEGER with step
 
 
 TEST(UseDbase, setValueOfIntStepToInvalidValueFails) {
@@ -899,25 +887,28 @@ TEST(UseDbase, changeValueOnRefColumnIsLimitedToActualNumRecords) {
 // BDB_COLUMN_SELF_REFERENCE
 
 
-
-TEST(UseDbase, setValueOfSelfReferenceColumn_ToExistingRecord_InRefTableSucceeds) {
+TEST(UseDbase,
+     setValueOfSelfReferenceColumn_ToExistingRecord_InRefTableSucceeds) {
     CHECK_TRUE(BDB_setValue(2, 0, 6, 0));
 }
 
 
-TEST(UseDbase, setValueOfSelfReferenceColumnToNonExistingRecordInRefTableFails) {
+TEST(UseDbase,
+     setValueOfSelfReferenceColumnToNonExistingRecordInRefTableFails) {
     CHECK_FALSE(BDB_setValue(2, 0, 6, 1));
 }
 
 
-TEST(UseDbase, changeValueOnSelfReferenceColumnToExistingRecordInRefTableSucceeds) {
+TEST(UseDbase,
+     changeValueOnSelfReferenceColumnToExistingRecordInRefTableSucceeds) {
     rs_appendRecord(2);
     rs_appendRecord(2);
     CHECK_TRUE(BDB_changeValue(2, 0, 6, 2));
 }
 
 
-TEST(UseDbase, changeValueOnSelfReferenceColumnToNonExistingRecordInRefTableFails) {
+TEST(UseDbase,
+     changeValueOnSelfReferenceColumnToNonExistingRecordInRefTableFails) {
     rs_appendRecord(2);
     rs_appendRecord(2);
     CHECK_TRUE(BDB_changeValue(2, 0, 6, 2));
@@ -925,7 +916,8 @@ TEST(UseDbase, changeValueOnSelfReferenceColumnToNonExistingRecordInRefTableFail
 }
 
 
-TEST(UseDbase, deletingALowerRecordInTheSelfRefTableAdjustssRecordReference) {
+TEST(UseDbase,
+     deletingALowerRecordInTheSelfRefTableAdjustssRecordReference) {
     rs_appendRecord(2); // table 2, record 1
     rs_appendRecord(2); // table 2, record 2
 // make sure no record references T2 record 0:
@@ -934,7 +926,7 @@ TEST(UseDbase, deletingALowerRecordInTheSelfRefTableAdjustssRecordReference) {
     CHECK_TRUE(BDB_setValue(2, 2, 6, 1));
     CHECK_TRUE(BDB_setValue(0, 0, 2, 1));
     CHECK_TRUE(BDB_deleteRecord(2, 0));
-    BYTES_EQUAL(0, BDB_getValue(2, 0, 6)); // should now reference table 2, record 0
+    BYTES_EQUAL(0, BDB_getValue(2, 0, 6)); // should now reference table 2, rec 0
 }
 
 
@@ -950,23 +942,27 @@ TEST(UseDbase, insertingALowerRecordInTheSelfRefTableAdjustsRecordReference) {
 // BDB_COLUMN_VIRTUAL
 
 
-TEST(UseDbase, setValueFailsOnAVirtualColumn) {
+TEST(UseDbase,
+     setValueFailsOnAVirtualColumn) {
     CHECK_FALSE(BDB_setValue(0, 0, 4, 0));
 }
 
 
-TEST(UseDbase, changeValueFailsOnAVirtualColumn) {
+TEST(UseDbase,
+     changeValueFailsOnAVirtualColumn) {
     CHECK_FALSE(BDB_changeValue(0, 0, 4, 1));
 }
 
 
-TEST(UseDbase, getValueOnAVirtualColumn_ReturnsValueOfTheReferencedTableColumn) {
+TEST(UseDbase,
+     getValueOnAVirtualColumn_ReturnsValueOfTheReferencedTableColumn) {
     BDB_setValue(2, 0, 1, 8);
     BYTES_EQUAL(8, BDB_getValue(0, 0, 4));
 }
 
 
-TEST(UseDbase, writeValueOnAVirtualColumn_WritesValueOfTheReferencedTableColumn) {
+TEST(UseDbase,
+     writeValueOnAVirtualColumn_WritesValueOfTheReferencedTableColumn) {
     BDB_setValue(1, 0, 0, 1); // change record definition
     BDB_setValue(2, 0, 1, 13); // value of referenced table, column
     BYTES_EQUAL(1, BDB_writeValue(1, 0, 4, 0));
@@ -1144,431 +1140,3 @@ TEST(UseDbaseWithTxt, writeheaderOnChildCanDisplayParentColumn) {
     BDB_writeHeader(0, 0);
     STRNCMP_EQUAL(" BACD ", BDB_getWriteBuffer(), 6);
 }
-
-
-// writeRecordWithFormat
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_writesPlainText) {
-    BDB_writeRecordWithFormat(0, 0, "text\n");
-    STRNCMP_EQUAL("text", BDB_getWriteBuffer(), 4);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithTrueIf_writesIfTrueText) {
-    BDB_setValue(0, 0, 1, 1);
-    BDB_writeRecordWithFormat(0, 0, "{?&1}true{:}false{;} ");
-    STRNCMP_EQUAL("true ", BDB_getWriteBuffer(), 5);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFalseIf_writesIfFalseText) {
-    BDB_setValue(0, 0, 1, 0);
-    BDB_writeRecordWithFormat(0, 0, "{?&1}true{:}false{;} ");
-    STRNCMP_EQUAL("false ", BDB_getWriteBuffer(), 6);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFalseIfCondition_writesIfFalseText) {
-    BDB_setValue(0, 0, 1, 0);
-    BDB_writeRecordWithFormat(0, 0, "{?&1}true{:}false{;} ");
-    STRNCMP_EQUAL("false ", BDB_getWriteBuffer(), 5);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithTrueIfCondition_writesIfTrueText) {
-    BDB_setValue(0, 0, 1, 2);
-    BDB_writeRecordWithFormat(0, 0, "{?&1}true{:}false{;} ");
-    STRNCMP_EQUAL("true ", BDB_getWriteBuffer(), 5);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_withoutElse_writesIfTrueTextWhenTrue) {
-    BDB_setValue(0, 0, 1, 1);
-    BDB_writeRecordWithFormat(0, 0, "{?&1}true{;} ");
-    STRNCMP_EQUAL("true ", BDB_getWriteBuffer(), 5);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_withoutElse_writesNoTextWhenFalse) {
-    BDB_setValue(0, 0, 1, 0);
-    BDB_writeRecordWithFormat(0, 0, "{?&1}true{;} ");
-    STRNCMP_EQUAL("     ", BDB_getWriteBuffer(), 5);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithNumRecordsWithoutLeading0_writesNumRecords) {
-    BDB_writeRecordWithFormat(1, 0, "{*}\n");
-    STRNCMP_EQUAL(" 1", BDB_getWriteBuffer(), 2);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithNumRecordsWithLeading0_writesNumRecords) {
-    BDB_writeRecordWithFormat(1, 0, "{o*}\n");
-    STRNCMP_EQUAL("01", BDB_getWriteBuffer(), 2);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithRecordId_withoutLeading0_writesRecordId) {
-    BDB_insertRecordAfter(1, 0);
-    BDB_insertRecordAfter(1, 0);
-    BDB_writeRecordWithFormat(1, 2, "{#}\n");
-    STRNCMP_EQUAL(" 2", BDB_getWriteBuffer(), 2);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithRecordId_withLeading0_writesRecordId) {
-    BDB_writeRecordWithFormat(1, 0, "{o#}\n");
-    STRNCMP_EQUAL("00", BDB_getWriteBuffer(), 2);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithColumnId_withoutLeading0_writesRecordValue) {
-    BDB_setValue(0, 0, 1, 412);
-    BDB_writeRecordWithFormat(0, 0, "{&1}\n");
-    STRNCMP_EQUAL(" 412 ", BDB_getWriteBuffer(), 4);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithColumnId_withLeading0_writesRecordValue) {
-    BDB_setValue(0, 0, 1, 412);
-    BDB_writeRecordWithFormat(0, 0, "{o&1}\n");
-    STRNCMP_EQUAL("0412 ", BDB_getWriteBuffer(), 4);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_padsWithTrailingSpacesUpToMaxStringBufferSize) {
-    BDB_writeRecordWithFormat(0, 0, "text\0");
-    STRNCMP_EQUAL("text                ", BDB_getWriteBuffer(), 20);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_writesDecimalWithAndWithoutLeading0) {
-    BDB_setValue(1, 0, 2, 15);
-    BDB_setValue(1, 0, 4, 75);
-    BDB_writeRecordWithFormat(1, 0, "{&4}-{o&4}-{&2}\0");
-    STRNCMP_EQUAL(" 7.5-07.5-0.0015    ", BDB_getWriteBuffer(), 20);
-}
-
-
-// if literal
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_withIfEqLiteral_writesFirstOptionWhenTrue) {
-    BDB_setValue(1, 0, 1, 0);
-    BDB_writeRecordWithFormat(1, 0, "|{?&1==0}n/a{:}S{o&1}{;}|\0");
-    STRNCMP_EQUAL("|n/a|               ", BDB_getWriteBuffer(), 20);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_withIfLiteral_writesSecondOptionWhenFalse) {
-    BDB_setValue(1, 0, 1, 1);
-    BDB_writeRecordWithFormat(1, 0, "|{?&1==0}n/a{:}S{o&1}{;}|\0");
-    STRNCMP_EQUAL("|S001|              ", BDB_getWriteBuffer(), 20);
-}
-
-
-// if other columnId
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_withIfOtherColumnIdWorks) {
-    BDB_setValue(1, 0, 1, 3);
-    BDB_setValue(1, 0, 2, 3);
-    BDB_writeRecordWithFormat(1, 0, "{?&1==&2}T{:}F{;}\0");
-    STRNCMP_EQUAL("T", BDB_getWriteBuffer(), 1);
-}
-
-
-// if recordId
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_withRecordIdWorks) {
-    BDB_insertRecordAfter(1, 0);
-    BDB_insertRecordAfter(1, 0);
-    BDB_setValue(1, 2, 1, 2);
-    BDB_writeRecordWithFormat(1, 2, "{?&1==#}T{:}F{;}\0");
-    STRNCMP_EQUAL("T", BDB_getWriteBuffer(), 1);
-}
-
-
-// operators
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_withNEoperatorWorks) {
-    BDB_setValue(1, 0, 1, 5);
-    BDB_writeRecordWithFormat(1, 0, "{?&1!=0}T{;}|{?&1!=5}F{;}\0");
-    STRNCMP_EQUAL("T|                  ", BDB_getWriteBuffer(), 20);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_withGEoperatorWorks) {
-    BDB_setValue(1, 0, 1, 5);
-    BDB_writeRecordWithFormat(1, 0, "{?&1>=5}T{;}|{?&1>=6}F{;}\0");
-    STRNCMP_EQUAL("T|                  ", BDB_getWriteBuffer(), 20);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_withGToperatorWorks) {
-    BDB_setValue(1, 0, 1, 5);
-    BDB_writeRecordWithFormat(1, 0, "{?&1>4}T{;}|{?&1>5}F{;}\0");
-    STRNCMP_EQUAL("T|                   ", BDB_getWriteBuffer(), 20);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_withLEoperatorWorks) {
-    BDB_setValue(1, 0, 1, 5);
-    BDB_writeRecordWithFormat(1, 0, "{?&1<=5}T{;}|{?&1<=4}F{;}\0");
-    STRNCMP_EQUAL("T|                  ", BDB_getWriteBuffer(), 20);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_withLToperatorWorks) {
-    BDB_setValue(1, 0, 1, 5);
-    BDB_writeRecordWithFormat(1, 0, "{?&1<6}T{;}|{?&1<5}F{;}\0");
-    STRNCMP_EQUAL("T|                   ", BDB_getWriteBuffer(), 20);
-}
-
-
-// special values
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_recordIdPlusWorks) {
-    BDB_insertRecordAfter(1, 0);
-    BDB_insertRecordAfter(1, 0);
-    BDB_writeRecordWithFormat(1, 2, "{o#+}\0");
-    STRNCMP_EQUAL("03                  ", BDB_getWriteBuffer(), 20);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_asteriskShowsTotalNumberOfRecords) {
-    BDB_insertRecordAfter(1, 0);
-    BDB_insertRecordAfter(1, 0);
-    BDB_writeRecordWithFormat(1, 0, "{o*}\0");
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_asHexShowsHexaDecimalFormat) {
-    BDB_setValue(0, 0, 1, 14);
-    BDB_writeRecordWithFormat(0, 0, "{x&1}\0");
-    STRNCMP_EQUAL("00E ", BDB_getWriteBuffer(), 4);
-}
-
-
-TEST(UseDbaseWithTxt,
-     writeRecordWithFormat_hiddenColumnId_isInvisible) {
-    BDB_writeRecordWithFormat(0, 0, "a{h&1}b\0");
-    STRNCMP_EQUAL("ab", BDB_getWriteBuffer(), 2);
-}
-
-
-// getNumEditableColumnsInFormat
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withoutEditableColumns_returns0) {
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{*}b{#}c{^1}d\0");
-    BYTES_EQUAL(0, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_with1columnId_returns1) {
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(3, 0, "a{&0}b\0");
-    BYTES_EQUAL(1, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_with1columnId_returns2) {
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(3, 0, "a{&0}{&0}b\0");
-    BYTES_EQUAL(2, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withHiddenColumnId_returns1) {
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(3, 0, "a{h&0}b\0");
-    BYTES_EQUAL(1, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withFixedColumnId_returns0) {
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{f&1}b\0");
-    BYTES_EQUAL(0, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withFixedIf_returns0_ifTrue) {
-    BDB_setValue(0, 0, 1, 1);
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{?f&1}b{;}\0");
-    BYTES_EQUAL(0, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withIf_returns1_ifTrue) {
-    BDB_setValue(3, 0, 0, 1);
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{?&1}b{:}c{;}\0");
-    BYTES_EQUAL(1, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withColumnIdInTrueIfBranch_returns2) {
-    BDB_setValue(0, 0, 1, 1);
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{?&1}{&2}{:}c{;}\0");
-    BYTES_EQUAL(2, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withIf_returns0_ifFalse) {
-    BDB_setValue(0, 0, 1, 0);
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{?&1}b{:}c{;}\0");
-    BYTES_EQUAL(0, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withColumnIdInFalseIfBranch_returns1_ifFalse) {
-    BDB_setValue(0, 0, 1, 0);
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{?&1}b{:}{&2}{;}\0");
-    BYTES_EQUAL(1, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withFixedIfRhs_returns0_ifTrue) {
-    BDB_setValue(0, 0, 1, 0);
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{?f&1==0}{:}{&2}{;}\0");
-    BYTES_EQUAL(0, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withIfRhs_returns1_ifTrue) {
-    BDB_setValue(0, 0, 1, 2);
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{?&1==2}b{:}c{;}\0");
-    BYTES_EQUAL(1, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withColumnIdInTrueIfRhsBranch_returns2) {
-    BDB_setValue(0, 0, 1, 2);
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{?&1==2}{&2}{:}c{;}\0");
-    BYTES_EQUAL(2, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withIfRhs_returns0_ifFalse) {
-    BDB_setValue(0, 0, 1, 2);
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{?&1==3}b{:}c{;}\0");
-    BYTES_EQUAL(0, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withColumnIdInFalseIfRhsBranch_returns1_ifFalse) {
-    BDB_setValue(0, 0, 1, 2);
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{?&1==1}b{:}{&2}{;}\0");
-    BYTES_EQUAL(1, numCols);
-}
-
-
-// note: range table3, column0 is 0-99
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withMaxValueLt100_returns1) {
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(3, 0, "a{&0}b\0");
-    BYTES_EQUAL(1, numCols);
-}
-
-
-// note: range table3, column1 is 0-200
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withMaxValueGt100_returns3) {
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(3, 0, "a{&1}b\0");
-    BYTES_EQUAL(3, numCols);
-}
-
-
-// note: range table0, column1 is 0-4000
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withMaxValueGt1000_returns4) {
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{&1}b\0");
-    BYTES_EQUAL(4, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withHiddenColumnIdGt100_returns1) {
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(3, 0, "a{h&1}b\0");
-    BYTES_EQUAL(1, numCols);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getNumEditableColumnsInFormat_withIfGt100_returns1_ifTrue) {
-    BDB_setValue(0, 0, 1, 1);
-    uint8_t numCols = BDB_getNumEditableColumnsInFormat(0, 0, "a{?&1}b{:}c{;}\0");
-    BYTES_EQUAL(1, numCols);
-}
-
-/*TODO:
- *  string (write as 1, edit as 8..12)
- *  decimal (?)
- *  enum waar cursor?
- * &i|01 02 11 22 etc ?? (write fn plakt ze aan elkaar)
- */
-
-
-// getColumnIdFromFormat
-
-
-TEST(UseDbaseWithTxt,
-     getColumnIdFromFmtId0_withColumn0as1st_returns0) {
-    uint8_t columnId = BDB_getColumnIdFromFormatIdOfFmtTxt(3, 0, 0, "a{&0}b\0");
-    BYTES_EQUAL(0, columnId);
-}
-
-
-TEST(UseDbaseWithTxt,
-     getColumnIdFromFmtId0_withColumn1as1st_returns1) {
-    uint8_t columnId = BDB_getColumnIdFromFormatIdOfFmtTxt(3, 0, 0, "a{&1}b\0");
-    BYTES_EQUAL(1, columnId);
-}
-
-/* todo :
- *
- * ? can be edited @ next cursor pos
- */

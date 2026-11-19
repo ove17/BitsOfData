@@ -1,12 +1,12 @@
-// WriteColumns.c
-// TODO: ColumnWriter.c
-
+// WriteValues.c
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <assert.h>
+
+#include "MathUtils.h"
 
 
 static char* StringBuffer = NULL;
@@ -20,13 +20,13 @@ static void increaseCursorPosition(void) {
 }
 
 
-void wc_initBuffer(const uint8_t size) {
+void wv_initBuffer(const uint8_t size) {
     Size = size;
     StringBuffer = calloc(size, sizeof(uint8_t));
 }
 
 
-void wc_freeBuffer(void) {
+void wv_freeBuffer(void) {
     if (StringBuffer) {
         free(StringBuffer);
     }
@@ -36,27 +36,28 @@ void wc_freeBuffer(void) {
 }
 
 
-char* wc_getWriteBuffer(void) {
+char* wv_getWriteBuffer(void) {
     return StringBuffer;
 }
 
 
-void wc_setCursorPosition(const uint8_t position) {
+void wv_setCursorPosition(const uint8_t position) {
     assert(position < Size);
     CursorPosition = position;
 }
 
 
-uint8_t wc_getCursorPosition(void) {
+uint8_t wv_getCursorPosition(void) {
     return CursorPosition;
 }
 
 
 // writes in reverse order, truncates if value does not fit in numDigits
-void wc_writeInteger(uint16_t value,
-                     const uint8_t numDigits,
+void wv_writeInteger(uint16_t value,
+                     const uint16_t maxValue,
                      const bool leading0) {
-    wc_setCursorPosition(CursorPosition + numDigits);
+    const uint8_t numDigits = mu_getNumDigits(maxValue);
+    wv_setCursorPosition(CursorPosition + numDigits);
     char fillChar = leading0 ? '0' : ' ';
     for (uint8_t i = CursorPosition; i > CursorPosition - numDigits; i--) {
         if (value > 0) {
@@ -72,14 +73,10 @@ void wc_writeInteger(uint16_t value,
 }
 
 
-void wc_writeHex(uint16_t value,
+void wv_writeHex(uint16_t value,
                  uint16_t maxValue) {
-    uint8_t numDigits = 1;
-    while (maxValue > 0x0F) {
-        maxValue >>= 4;
-        numDigits++;
-    }
-    wc_setCursorPosition(CursorPosition + numDigits);
+    uint8_t numDigits = mu_getHexNumDigits(maxValue);
+    wv_setCursorPosition(CursorPosition + numDigits);
     for (uint16_t i = CursorPosition; i > CursorPosition - numDigits; i--) {
         const uint8_t digit = value & 0x0F;
         if (digit < 10) {
@@ -93,11 +90,15 @@ void wc_writeHex(uint16_t value,
 
 
 // writes in reverse order, truncates if value does not fit in numDigits
-void wc_writeDecimal(uint16_t value,
-                     const uint8_t numDigits,
+void wv_writeDecimal(uint16_t value,
+                     const uint16_t maxValue,
                      const uint8_t decimalShift,
                      const bool leading0) {
-    wc_setCursorPosition(CursorPosition + numDigits);
+    uint8_t numDigits = mu_getNumDigits(maxValue) + 1; // +1 for decimal point
+    if (decimalShift >= numDigits) {
+        numDigits = decimalShift + 2; // extra lead0's after pt
+    }
+    wv_setCursorPosition(CursorPosition + numDigits);
     char fillChar = '0';
     for (uint8_t i = 0; i < numDigits; i++) {
         const uint8_t position = CursorPosition - i - 1;
@@ -119,7 +120,7 @@ void wc_writeDecimal(uint16_t value,
 }
 
 
-void wc_writeTxt(const char* txt,
+void wv_writeTxt(const char* txt,
                  const uint8_t maxLength) {
     bool txtFinished = false;
     for (uint8_t i = 0; i < maxLength; i++) {
@@ -130,7 +131,7 @@ void wc_writeTxt(const char* txt,
 }
 
 
-void wc_writeChar(const uint8_t charIndex,
+void wv_writeChar(const uint8_t charIndex,
                   const char* charSet) {
     StringBuffer[CursorPosition] = charSet[charIndex];
     increaseCursorPosition();

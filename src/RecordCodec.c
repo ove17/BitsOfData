@@ -16,8 +16,9 @@ static inline uint8_t getStep(const BDB_columnT* colDef) {
     if (colDef->colType == BDB_COLUMN_DECIMAL) {
         return colDef->dec.step;
     }
-    if (colDef->colType == BDB_COLUMN_INT_STEP) {
-        return colDef->intS.step;
+    if (colDef->colType == BDB_COLUMN_INTEGER
+            &&  colDef->intg.step > 0) {
+        return colDef->intg.step;
     }
     return 1;
 }

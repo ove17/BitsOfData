@@ -1,6 +1,7 @@
 /* TestTemplateLanguage.cpp
  */
 
+
 #include "CppUTest/TestHarness.h"
 #include "CppUTest/UtestMacros.h"
 #include "cpputestUtils.h"
@@ -90,13 +91,13 @@ TEST(TemplateLanguage,
 
 TEST(TemplateLanguage,
       parsingColumnId_withHexAndOffset1_triggersAssert) {
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{x&0+}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{&0+x}"));
 }
 
 
 TEST(TemplateLanguage,
      parsingColumnId_withSlashAndHex_triggersAssert) {
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{x&0/1}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{&0x/1}"));
 }
 
 
@@ -144,11 +145,41 @@ TEST(TemplateLanguage,
 }
 
 
+TEST(TemplateLanguage,
+     parsingColumnId_withPercentageAndHex_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{&0x%}"));
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withPercentageAndOffset1_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{&0+%}"));
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withPercentageAndHidden_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{h&0%}"));
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withPercentageAndSlash_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{&0%/1}"));
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withAnyValidCharAfterPercentage_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{&0%0}"));
+}
+
+
 // SYNTAX_ERRORS: TEXT
 
 
 TEST(TemplateLanguage,
-      // parsingTextWithStrayClosingBrace_triggersAssert)
+     parsingTextWithStrayClosingBrace_triggersAssert) {
     CHECK_THROWS(AssertionFailure, tl_parseFormat("abc}def"));
 }
 
@@ -160,6 +191,12 @@ TEST(TemplateLanguage,
 
 
 // SYNTAX ERRORS: IF
+
+
+TEST(TemplateLanguage,
+      parsingIfLhs_withPercentage_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&0%}a{;}"));
+}
 
 
 TEST(TemplateLanguage,
@@ -177,7 +214,7 @@ TEST(TemplateLanguage,
 TEST(TemplateLanguage,
       parsingIfLhs_withAnyPrefixOtherThanFixed_triggersAssert) {
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{?o&1}a{;}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?x&1}a{;}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1x}a{;}"));
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{?h&1}a{;}"));
 }
 
@@ -277,33 +314,43 @@ TEST(TemplateLanguage,
 
 
 TEST(TemplateLanguage,
-      parsingIf_withPlusPostfixInRhsLiteral_triggersAssert) {
+      parsingIf_withPostfixInRhsLiteral_triggersAssert) {
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==2+}a{;}"));
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==12x}a{;}"));
 }
 
 
 TEST(TemplateLanguage,
       parsingIf_withAnyPrefixInRhsLiteral_triggersAssert) {
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==o12}a{;}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==x12}a{;}"));
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==h12}a{;}"));
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==f12}a{;}"));
 }
 
 
 TEST(TemplateLanguage,
+     parsingIf_withHexPostfixInRhsRecordId_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==#12x}a{;}"));
+}
+
+
+TEST(TemplateLanguage,
       parsingIf_withAnyPrefixInRhsRecordId_triggersAssert) {
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==o#12}a{;}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==x#12}a{;}"));
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==h#12}a{;}"));
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==f#12}a{;}"));
 }
 
 
 TEST(TemplateLanguage,
+     parsingIf_withHexPostfixInRhsColumnId_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==&12x}a{;}"));
+}
+
+
+TEST(TemplateLanguage,
       parsingIf_withAnyPrefixInRhsColumnIdId_triggersAssert) {
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==o&12}a{;}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==x&12}a{;}"));
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==h&12}a{;}"));
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{?&1==f&12}a{;}"));
 }
@@ -313,14 +360,14 @@ TEST(TemplateLanguage,
 
 
 TEST(TemplateLanguage,
-     parsingNumRecords_withPostfixPlus_triggersAssert) {
+     parsingNumRecords_withPostfixPlusOrHex_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{*x}"));
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{*+}"));
 }
 
 
 TEST(TemplateLanguage,
      parsingNumRecords_withAnyPrefixOtherThanLeading0_triggersAssert) {
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{x*}"));
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{h*}"));
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{f*}"));
 }
@@ -330,8 +377,13 @@ TEST(TemplateLanguage,
 
 
 TEST(TemplateLanguage,
+     parsingNumRecords_withPostfixHex_triggersAssert) {
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{#x}"));
+}
+
+
+TEST(TemplateLanguage,
       parsingRecordId_withAnyPrefixOtherThanLeading0_triggersAssert) {
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{x#}"));
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{h#}"));
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{f#}"));
 }
@@ -343,16 +395,16 @@ TEST(TemplateLanguage,
 TEST(TemplateLanguage,
       parsingParentColumnId_withAnyPrefix_triggersAssert) {
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{o^}"));
-    CHECK_THROWS(AssertionFailure, tl_parseFormat("{x^}"));
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{h^}"));
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{f^}"));
 }
 
 
 TEST(TemplateLanguage,
-     parsingParentColumnId_withPostfixPlus_triggersAssert) {
+     parsingParentColumnId_withPostfixPlusOrHex_triggersAssert) {
     CHECK_THROWS(AssertionFailure, tl_parseFormat("{^+}"));
-}
+    CHECK_THROWS(AssertionFailure, tl_parseFormat("{^x}"));
+     }
 
 
 // TEXT
@@ -544,19 +596,45 @@ TEST(TemplateLanguage,
 }
 
 
+// COLUMN_ID with %
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withPercentage_returnsTokenValueWithPercentage) {
+    tl_tokenT *result = tl_parseFormat("{&1%}");
+    CHECK_TRUE(result[0].properties.asPercentage);
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withPercAndLeading0_returnsTokenValueWithPercAndLeading0) {
+    tl_tokenT *result = tl_parseFormat("{o&1%}");
+    CHECK_TRUE(result[0].properties.asPercentage);
+    CHECK_TRUE(result[0].properties.leading0);
+}
+
+
+TEST(TemplateLanguage,
+     parsingColumnId_withPercAndFixed_returnsTokenValueWithPercAndFixed) {
+    tl_tokenT *result = tl_parseFormat("{o&1%}");
+    CHECK_TRUE(result[0].properties.asPercentage);
+    CHECK_TRUE(result[0].properties.leading0);
+}
+
+
 // COLUMN_ID with HEX
 
 
 TEST(TemplateLanguage,
      parsingColumnId_withHex_returnsTokenValueWithHex) {
-    tl_tokenT *result = tl_parseFormat("{x&1}");
+    tl_tokenT *result = tl_parseFormat("{&1x}");
     CHECK_TRUE(result[0].properties.asHex);
 }
 
 
 TEST(TemplateLanguage,
      parsingColumnId_withoutHex_afterOneWith_returnsTokenValueWithoutHex) {
-    tl_tokenT *result = tl_parseFormat("{x&2}");
+    tl_tokenT *result = tl_parseFormat("{&2x}");
     CHECK_TRUE(result[0].properties.asHex);
     result = tl_parseFormat("{&3}");
     CHECK_FALSE(result[0].properties.asHex);
@@ -642,7 +720,7 @@ TEST(TemplateLanguage,
 
 TEST(TemplateLanguage,
      parsingColumnId_withHexandFixed_returnsTokenValueWithHexandFixed) {
-    tl_tokenT *result = tl_parseFormat("{xf&0}");
+    tl_tokenT *result = tl_parseFormat("{f&0x}");
     CHECK_TRUE(result[0].properties.isFixed);
     CHECK_TRUE(result[0].properties.asHex);
 }

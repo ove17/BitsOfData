@@ -39,6 +39,16 @@ static inline uint8_t mu_getNumDigits(const uint16_t value) {
 }
 
 
+static inline uint8_t mu_getHexNumDigits(uint16_t value) {
+    uint8_t numDigits = 1;
+    while (value > 0x0F) {
+        value >>= 4;
+        numDigits++;
+    }
+    return numDigits;
+}
+
+
 static inline bool mu_evalCondition(const uint16_t value,
                                     const mu_operatorT operator,
                                     const uint16_t target) {
